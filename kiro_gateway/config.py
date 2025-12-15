@@ -227,7 +227,7 @@ LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO").upper()
 # Это помогает справиться с "зависшими" запросами, когда модель долго думает.
 # По умолчанию: 30 секунд (рекомендуется для production)
 # Установите меньшее значение (например, 10-15) для более агрессивного retry.
-FIRST_TOKEN_TIMEOUT: float = float(os.getenv("FIRST_TOKEN_TIMEOUT", "30"))
+FIRST_TOKEN_TIMEOUT: float = float(os.getenv("FIRST_TOKEN_TIMEOUT", "15"))
 
 # Максимальное количество попыток при таймауте первого токена.
 # После исчерпания всех попыток будет возвращена ошибка.
