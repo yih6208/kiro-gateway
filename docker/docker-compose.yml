@@ -1,0 +1,44 @@
+version: '3.8'
+
+# Docker Compose 會自動載入 .env 文件（如果存在）
+# 所有環境變數都有預設值，.env 文件是可選的
+
+services:
+  kiro-gateway:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: kiro-gateway
+    ports:
+      - "8001:8000"
+    environment:
+      # 使用 kiro-cli 數據庫
+      - KIRO_CLI_DB_FILE=/root/.local/share/kiro-cli/data.sqlite3
+      # 設置代理 API 密鑰（可以在 .env 文件中覆蓋）
+      - PROXY_API_KEY=${PROXY_API_KEY:-my-super-secret-password-123}
+      # kiro-cli 登入參數（可以在 .env 文件中覆蓋）
+      - KIRO_START_URL=${KIRO_START_URL:-https://amzn.awsapps.com/start}
+      - KIRO_LOGIN_REGION=${KIRO_LOGIN_REGION:-us-east-1}
+      - KIRO_LICENSE=${KIRO_LICENSE:-pro}
+      # 調試模式（實驗用）
+      - DEBUG_MODE=all
+    volumes:
+      # 持久化 kiro-cli 憑證數據（重要！避免每次重啟都要重新登入）
+      - kiro-cli-data:/root/.local/share/kiro-cli
+      # 持久化 debug 日誌（相對於 docker/ 目錄）
+      - ../debug_logs:/app/debug_logs
+    restart: unless-stopped
+    # 支持互動式終端（用於 kiro-cli login）
+    stdin_open: true
+    tty: true
+    # 日誌配置
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  # 持久化 kiro-cli 數據
+  kiro-cli-data:
+    driver: local

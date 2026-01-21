@@ -406,7 +406,11 @@ def anthropic_to_kiro(
     # Get model ID for Kiro API (normalizes + resolves hidden models)
     # Pass-through principle: we normalize and send to Kiro, Kiro decides if valid
     model_id = get_model_id_for_kiro(request.model, HIDDEN_MODELS)
-
+    
+    logger.info(
+        f"🔄 Model conversion: '{request.model}' -> '{model_id}'"
+    )
+    
     logger.debug(
         f"Converting Anthropic request: model={request.model} -> {model_id}, "
         f"messages={len(unified_messages)}, tools={len(unified_tools) if unified_tools else 0}, "

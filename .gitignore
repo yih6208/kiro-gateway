@@ -6,6 +6,8 @@
 .vscode/
 .idea/
 .shard/
+CLAUDE.md
+docker/*.md
 
 # Python
 __pycache__/

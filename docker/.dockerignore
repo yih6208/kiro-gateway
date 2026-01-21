@@ -1,0 +1,71 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 環境變數和憑證
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+kiro_creds.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 測試和覆蓋率
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# 日誌
+debug_logs/
+*.log
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Docker
+.dockerignore
+*.tar
+*.tar.gz
+kiro-gateway-*.tar
+kiro-gateway-*.tar.gz
+
+# 文檔
+docs/
+*.md
+
+# 其他
+.DS_Store
+*.sqlite
+*.db

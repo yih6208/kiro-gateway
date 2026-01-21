@@ -202,6 +202,9 @@ HIDDEN_MODELS: Dict[str, str] = {
     # Hidden in Kiro API but functional. Great for users who prefer it.
     "claude-3.7-sonnet": "CLAUDE_3_7_SONNET_20250219_V1_0",
     
+    # Claude Sonnet 4.5 with 1M context window
+    "claude-sonnet-4.5": "claude-sonnet-4.5-1m",
+    
     # Add other hidden/experimental models here as discovered.
     # Example: "claude-secret-model": "INTERNAL_SECRET_MODEL_ID",
 }

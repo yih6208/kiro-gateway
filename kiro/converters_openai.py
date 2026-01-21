@@ -328,6 +328,9 @@ def build_kiro_payload(
     # Pass-through principle: we normalize and send to Kiro, Kiro decides if valid
     model_id = get_model_id_for_kiro(request_data.model, HIDDEN_MODELS)
     
+    logger.info(
+        f"🔄 Model conversion: '{request_data.model}' -> '{model_id}'"
+    )
     logger.debug(
         f"Converting OpenAI request: model={request_data.model} -> {model_id}, "
         f"messages={len(unified_messages)}, tools={len(unified_tools) if unified_tools else 0}, "

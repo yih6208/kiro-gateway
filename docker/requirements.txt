@@ -1,0 +1,13 @@
+# Prod dependencies
+fastapi
+uvicorn[standard]
+httpx
+loguru
+requests
+python-dotenv
+tiktoken
+
+# Testing dependencies
+pytest
+pytest-asyncio
+hypothesis
