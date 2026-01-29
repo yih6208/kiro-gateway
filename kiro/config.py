@@ -178,11 +178,36 @@ TOKEN_REFRESH_THRESHOLD: int = 600
 # ==================================================================================================
 
 # Maximum number of retry attempts on errors
-MAX_RETRIES: int = 3
+# Default: 3, Recommended for 429 errors: 5-10
+MAX_RETRIES: int = int(os.getenv("MAX_RETRIES", "3"))
 
 # Base delay between attempts (seconds)
 # Uses exponential backoff: delay * (2 ** attempt)
-BASE_RETRY_DELAY: float = 1.0
+# Default: 1.0, Recommended for 429 errors: 2.0
+BASE_RETRY_DELAY: float = float(os.getenv("BASE_RETRY_DELAY", "1.0"))
+
+# ==================================================================================================
+# Global Rate Limiting Configuration
+# ==================================================================================================
+# Prevents 429 (Too Many Requests) errors from Kiro API by controlling request flow.
+
+# Maximum concurrent requests to Kiro API
+# Set to 0 to disable (unlimited concurrency)
+# Default: 0 (disabled), Recommended: 10-20 to avoid 429 errors
+RATE_LIMIT_MAX_CONCURRENT: int = int(os.getenv("RATE_LIMIT_MAX_CONCURRENT", "0"))
+
+# Minimum interval between requests (seconds)
+# Controls the rate at which requests are sent to Kiro API
+# Set to 0 to disable (no throttling)
+# Default: 0 (disabled), Recommended: 0.1-0.5 seconds
+# Example: 0.2 = max 5 requests per second
+RATE_LIMIT_MIN_INTERVAL: float = float(os.getenv("RATE_LIMIT_MIN_INTERVAL", "0"))
+
+# Global backoff duration when 429 is received (seconds)
+# When any request receives 429, ALL requests will pause for this duration
+# Set to 0 to disable (each request handles 429 independently)
+# Default: 0 (disabled), Recommended: 5-10 seconds
+RATE_LIMIT_429_BACKOFF: float = float(os.getenv("RATE_LIMIT_429_BACKOFF", "0"))
 
 # ==================================================================================================
 # Hidden Models Configuration
@@ -311,6 +336,35 @@ TOOL_DESCRIPTION_MAX_LENGTH: int = int(os.getenv("TOOL_DESCRIPTION_MAX_LENGTH", 
 # This helps the model understand and adapt to Kiro API limitations
 # Default: true (enabled)
 TRUNCATION_RECOVERY: bool = os.getenv("TRUNCATION_RECOVERY", "true").lower() in ("true", "1", "yes")
+# HTTP Connection Pool Settings
+# ==================================================================================================
+
+# Maximum total connections in the pool
+# Increase this if you have many concurrent requests
+# Default: 100 (suitable for most use cases)
+# Recommended for high concurrency: 200-500
+# For 512MB RAM: 300 is safe
+HTTP_MAX_CONNECTIONS: int = int(os.getenv("HTTP_MAX_CONNECTIONS", "100"))
+
+# Maximum keep-alive connections (connections kept open for reuse)
+# This is the real bottleneck for concurrent requests
+# Default: 20 (may be too low for high concurrency)
+# Recommended: 50-150 depending on your traffic
+# For 512MB RAM: 150 is safe
+HTTP_MAX_KEEPALIVE_CONNECTIONS: int = int(os.getenv("HTTP_MAX_KEEPALIVE_CONNECTIONS", "20"))
+
+# Keep-alive connection expiry time in seconds
+# How long to keep idle connections open for reuse
+# Default: 30 seconds
+# Recommended: 60 seconds (reduces connection overhead)
+HTTP_KEEPALIVE_EXPIRY: float = float(os.getenv("HTTP_KEEPALIVE_EXPIRY", "30.0"))
+
+# Connection pool timeout in seconds (time to wait for available connection)
+# Set to "none" or empty string to disable timeout (recommended)
+# Default: 30 seconds
+# Recommended: "none" (no timeout) or very high value like 300
+_pool_timeout = os.getenv("HTTP_POOL_TIMEOUT", "30.0")
+HTTP_POOL_TIMEOUT: Optional[float] = None if _pool_timeout.lower() in ("none", "", "null") else float(_pool_timeout)
 
 # ==================================================================================================
 # Logging Settings

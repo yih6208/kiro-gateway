@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  kiro-gateway:
+    # 使用預先構建的 image（不需要源代碼）
+    image: kiro-gateway_kiro-gateway:latest
+    container_name: kiro-gateway
+    network_mode: bridge
+    ports:
+      - "8001:8000"
+    environment:
+      # ===== 認證配置 =====
+      # 使用 kiro-cli 數據庫（容器內路徑）
+      - KIRO_CLI_DB_FILE=/root/.local/share/kiro-cli/data.sqlite3
+      # 代理 API 密鑰
+      - PROXY_API_KEY=TimLiHomeServer
+      # kiro-cli 登入參數
+      - KIRO_START_URL=https://amzn.awsapps.com/start
+      - KIRO_LOGIN_REGION=us-east-1
+      - KIRO_LICENSE=pro
+
+      # ===== HTTP 連接池配置 =====
+      # 針對 512MB RAM / 2 CPU 優化
+      - HTTP_MAX_CONNECTIONS=300
+      - HTTP_MAX_KEEPALIVE_CONNECTIONS=150
+      - HTTP_KEEPALIVE_EXPIRY=60.0
+      - HTTP_POOL_TIMEOUT=none
+
+      # ===== 全局速率限制 =====
+      # 防止 429 錯誤
+      - RATE_LIMIT_MAX_CONCURRENT=10
+      - RATE_LIMIT_MIN_INTERVAL=0.5
+      - RATE_LIMIT_429_BACKOFF=15.0
+
+      # ===== 重試配置 =====
+      - MAX_RETRIES=3
+      - BASE_RETRY_DELAY=2.0
+
+      # ===== 日誌配置 =====
+      - DEBUG_MODE=errors
+      - LOG_LEVEL=INFO
+
+      # ===== 其他配置 =====
+      - STREAMING_READ_TIMEOUT=300
+      - FIRST_TOKEN_TIMEOUT=15
+      - FIRST_TOKEN_MAX_RETRIES=3
+
+    volumes:
+      # 持久化 kiro-cli 憑證數據（使用 bind mount，數據在項目目錄下）
+      # 數據位置：./kiro-gateway_kiro-cli-data/_data/
+      - ./kiro-cli-data:/root/.local/share/kiro-cli
+      # 持久化 debug 日誌（同目錄）
+      - ./debug_logs:/app/debug_logs
+    restart: unless-stopped
+    # 支持互動式終端（用於 kiro-cli login）
+    stdin_open: true
+    tty: true
+    # 資源限制（2 核心 / 512MB）
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'      # 最多使用 2 個 CPU 核心
+          memory: 512M     # 最多使用 512MB 記憶體
+        reservations:
+          cpus: '0.5'      # 保留 0.5 個 CPU 核心
+          memory: 256M     # 保留 256MB 記憶體
+    # 日誌配置
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -5,34 +5,43 @@ services:
     # 使用預先構建的 image（不需要源代碼）
     image: kiro-gateway_kiro-gateway:latest
     container_name: kiro-gateway
+    network_mode: bridge
     ports:
       - "8001:8000"
+    # 從 .env 文件加載環境變數
+    env_file:
+      - ../.env
     environment:
-      # 使用 kiro-cli 數據庫
+      # 使用 kiro-cli 數據庫（容器內路徑）
       - KIRO_CLI_DB_FILE=/root/.local/share/kiro-cli/data.sqlite3
-      # 設置代理 API 密鑰（可以在 .env 文件中覆蓋）
-      - PROXY_API_KEY=${PROXY_API_KEY:-my-super-secret-password-123}
-      # kiro-cli 登入參數（可以在 .env 文件中覆蓋）
+      # 以下變數可以在 .env 文件中配置，這裡提供默認值
+      - PROXY_API_KEY=${PROXY_API_KEY:-TimLiHomeServer}
       - KIRO_START_URL=${KIRO_START_URL:-https://amzn.awsapps.com/start}
       - KIRO_LOGIN_REGION=${KIRO_LOGIN_REGION:-us-east-1}
       - KIRO_LICENSE=${KIRO_LICENSE:-pro}
+      - DEBUG_MODE=${DEBUG_MODE:-errors}
+      # HTTP 連接池設置（從 .env 加載，這裡提供默認值）
+      - HTTP_MAX_CONNECTIONS=${HTTP_MAX_CONNECTIONS:-300}
+      - HTTP_MAX_KEEPALIVE_CONNECTIONS=${HTTP_MAX_KEEPALIVE_CONNECTIONS:-150}
+      - HTTP_KEEPALIVE_EXPIRY=${HTTP_KEEPALIVE_EXPIRY:-60.0}
+      - HTTP_POOL_TIMEOUT=${HTTP_POOL_TIMEOUT:-none}
     volumes:
       # 持久化 kiro-cli 憑證數據（重要！避免每次重啟都要重新登入）
       - kiro-cli-data:/root/.local/share/kiro-cli
       # 持久化 debug 日誌
-      - ./debug_logs:/app/debug_logs
+      - ../debug_logs:/app/debug_logs
     restart: unless-stopped
     # 支持互動式終端（用於 kiro-cli login）
     stdin_open: true
     tty: true
-    # 資源限制
+    # 資源限制（調整為 2 核心 / 512MB）
     deploy:
       resources:
         limits:
-          cpus: '1.0'      # 最多使用 1 個 CPU 核心
-          memory: 1G       # 最多使用 1GB 記憶體
+          cpus: '2.0'      # 最多使用 2 個 CPU 核心
+          memory: 512M     # 最多使用 512MB 記憶體
         reservations:
-          cpus: '0.25'     # 保留 0.25 個 CPU 核心
+          cpus: '0.5'      # 保留 0.5 個 CPU 核心
           memory: 256M     # 保留 256MB 記憶體
     # 日誌配置
     logging:

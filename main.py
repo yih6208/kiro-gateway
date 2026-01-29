@@ -73,11 +73,20 @@ from kiro.config import (
     HIDDEN_FROM_LIST,
     FALLBACK_MODELS,
     VPN_PROXY_URL,
+    HTTP_MAX_CONNECTIONS,
+    HTTP_MAX_KEEPALIVE_CONNECTIONS,
+    HTTP_KEEPALIVE_EXPIRY,
+    HTTP_POOL_TIMEOUT,
+    RATE_LIMIT_MAX_CONCURRENT,
+    RATE_LIMIT_MIN_INTERVAL,
+    RATE_LIMIT_429_BACKOFF,
+    _warn_deprecated_debug_setting,
     _warn_timeout_configuration,
 )
 from kiro.auth import KiroAuthManager
 from kiro.cache import ModelInfoCache
 from kiro.model_resolver import ModelResolver
+from kiro.rate_limiter import init_rate_limiter
 from kiro.routes_openai import router as openai_router
 from kiro.routes_anthropic import router as anthropic_router
 from kiro.exceptions import validation_exception_handler
@@ -312,21 +321,75 @@ async def lifespan(app: FastAPI):
     concurrent requests efficiently (fixes issue #24).
     """
     logger.info("Starting application... Creating state managers.")
-    
+
+    # Log environment configuration for debugging
+    logger.info("=" * 80)
+    logger.info("ENVIRONMENT CONFIGURATION")
+    logger.info("=" * 80)
+    logger.info(f"App Version: {APP_VERSION}")
+    logger.info(f"Server Host: {SERVER_HOST}")
+    logger.info(f"Server Port: {SERVER_PORT}")
+    logger.info(f"Region: {REGION}")
+    logger.info(f"Log Level: {LOG_LEVEL}")
+    logger.info(f"Debug Mode: {os.getenv('DEBUG_MODE', 'off')}")
+    logger.info("-" * 80)
+    logger.info("Authentication Configuration:")
+    logger.info(f"  KIRO_CLI_DB_FILE: {KIRO_CLI_DB_FILE if KIRO_CLI_DB_FILE else 'Not set'}")
+    logger.info(f"  KIRO_CREDS_FILE: {KIRO_CREDS_FILE if KIRO_CREDS_FILE else 'Not set'}")
+    logger.info(f"  REFRESH_TOKEN: {'Set (hidden)' if REFRESH_TOKEN else 'Not set'}")
+    logger.info(f"  PROFILE_ARN: {PROFILE_ARN if PROFILE_ARN else 'Not set'}")
+    logger.info(f"  PROXY_API_KEY: {'Set (hidden)' if PROXY_API_KEY else 'Not set'}")
+    logger.info("-" * 80)
+    logger.info("HTTP Connection Pool Configuration:")
+    logger.info(f"  HTTP_MAX_CONNECTIONS: {HTTP_MAX_CONNECTIONS}")
+    logger.info(f"  HTTP_MAX_KEEPALIVE_CONNECTIONS: {HTTP_MAX_KEEPALIVE_CONNECTIONS}")
+    logger.info(f"  HTTP_KEEPALIVE_EXPIRY: {HTTP_KEEPALIVE_EXPIRY}s")
+    logger.info(f"  HTTP_POOL_TIMEOUT: {HTTP_POOL_TIMEOUT}")
+    logger.info(f"  STREAMING_READ_TIMEOUT: {STREAMING_READ_TIMEOUT}s")
+    logger.info("-" * 80)
+    logger.info("VPN/Proxy Configuration:")
+    logger.info(f"  VPN_PROXY_URL: {'Set (hidden)' if VPN_PROXY_URL else 'Not set'}")
+    if VPN_PROXY_URL:
+        # Show proxy type without exposing credentials
+        proxy_type = VPN_PROXY_URL.split('://')[0] if '://' in VPN_PROXY_URL else 'http'
+        logger.info(f"  Proxy Type: {proxy_type}")
+    logger.info("-" * 80)
+    logger.info("Rate Limiting Configuration:")
+    logger.info(f"  RATE_LIMIT_MAX_CONCURRENT: {RATE_LIMIT_MAX_CONCURRENT if RATE_LIMIT_MAX_CONCURRENT > 0 else 'Disabled'}")
+    logger.info(f"  RATE_LIMIT_MIN_INTERVAL: {RATE_LIMIT_MIN_INTERVAL if RATE_LIMIT_MIN_INTERVAL > 0 else 'Disabled'}s")
+    logger.info(f"  RATE_LIMIT_429_BACKOFF: {RATE_LIMIT_429_BACKOFF if RATE_LIMIT_429_BACKOFF > 0 else 'Disabled'}s")
+    logger.info("-" * 80)
+    logger.info("Hidden Models: " + (", ".join(HIDDEN_MODELS) if HIDDEN_MODELS else "None"))
+    logger.info("=" * 80)
+
+    # Initialize global rate limiter (if enabled)
+    init_rate_limiter(
+        max_concurrent=RATE_LIMIT_MAX_CONCURRENT,
+        min_interval=RATE_LIMIT_MIN_INTERVAL,
+        backoff_429=RATE_LIMIT_429_BACKOFF,
+    )
+
     # Create shared HTTP client with connection pooling
     # This reduces memory usage and enables connection reuse across requests
-    # Limits: max 100 total connections, max 20 keep-alive connections
+    # Connection pool settings can be configured via environment variables
     limits = httpx.Limits(
-        max_connections=100,
-        max_keepalive_connections=20,
-        keepalive_expiry=30.0  # Close idle connections after 30 seconds
+        max_connections=HTTP_MAX_CONNECTIONS,
+        max_keepalive_connections=HTTP_MAX_KEEPALIVE_CONNECTIONS,
+        keepalive_expiry=HTTP_KEEPALIVE_EXPIRY
     )
     # Timeout configuration for streaming (long read timeout for model "thinking")
     timeout = httpx.Timeout(
         connect=30.0,
         read=STREAMING_READ_TIMEOUT,  # 300 seconds for streaming
         write=30.0,
-        pool=30.0
+        pool=HTTP_POOL_TIMEOUT
+    )
+    logger.info(
+        f"HTTP connection pool configured: "
+        f"max_connections={HTTP_MAX_CONNECTIONS}, "
+        f"max_keepalive={HTTP_MAX_KEEPALIVE_CONNECTIONS}, "
+        f"keepalive_expiry={HTTP_KEEPALIVE_EXPIRY}s, "
+        f"pool_timeout={HTTP_POOL_TIMEOUT}"
     )
     app.state.http_client = httpx.AsyncClient(
         limits=limits,
