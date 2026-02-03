@@ -2,7 +2,7 @@
 
 ## v2.2.1 (2026-02-03)
 
-**Git Commit:** `00eb71e`
+**Git Commit:** `e5284b3`
 **Docker Image:** `ghcr.io/yih6208/kiro-gateway:2.2.1`
 
 ### Changes
@@ -42,4 +42,4 @@
 
 | Version | Date | Git Commit | Notes |
 |---------|------|------------|-------|
-| 2.2.1 | 2026-02-03 | `9eac8e8` | Rate limiter, connection pool optimization |
+| 2.2.1 | 2026-02-03 | `e5284b3` | Rate limiter, connection pool optimization |
