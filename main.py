@@ -80,7 +80,6 @@ from kiro.config import (
     RATE_LIMIT_MAX_CONCURRENT,
     RATE_LIMIT_MIN_INTERVAL,
     RATE_LIMIT_429_BACKOFF,
-    _warn_deprecated_debug_setting,
     _warn_timeout_configuration,
 )
 from kiro.auth import KiroAuthManager
@@ -440,7 +439,11 @@ async def lifespan(app: FastAPI):
                 data = response.json()
                 models_list = data.get("models", [])
                 await app.state.model_cache.update(models_list)
-                logger.debug(f"Successfully loaded {len(models_list)} models from Kiro API")
+                logger.info(f"Successfully loaded {len(models_list)} models from Kiro API:")
+                for model in models_list:
+                    model_id = model.get("modelId", "unknown")
+                    display_name = model.get("displayName", model_id)
+                    logger.info(f"  - {display_name} ({model_id})")
             else:
                 raise Exception(f"HTTP {response.status_code}")
     except Exception as e:
