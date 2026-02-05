@@ -456,18 +456,24 @@ async def stream_kiro_to_anthropic(
         
         # Calculate output tokens
         output_tokens = count_tokens(full_content + full_thinking_content)
-        
+
         # Calculate total tokens from context usage if available
         if context_usage_percentage is not None:
+            logger.debug(f"[Anthropic] Calculating tokens from context_usage_percentage={context_usage_percentage}%")
             prompt_tokens, total_tokens, _, _ = calculate_tokens_from_context_usage(
                 context_usage_percentage, output_tokens, model_cache, model
             )
             input_tokens = prompt_tokens
+        else:
+            logger.warning(f"[Anthropic] No context_usage_percentage received from Kiro API")
         
         # Determine stop reason
         stop_reason = "tool_use" if tool_blocks else "end_turn"
-        
+
         # Send message_delta with stop_reason and usage
+        # IMPORTANT: Include input_tokens here because it was recalculated from context_usage_percentage
+        # The initial input_tokens in message_start was estimated from tiktoken (less accurate)
+        # Now we have the accurate value from Kiro API's percentage, so we send it here
         yield format_sse_event("message_delta", {
             "type": "message_delta",
             "delta": {
@@ -475,6 +481,7 @@ async def stream_kiro_to_anthropic(
                 "stop_sequence": None
             },
             "usage": {
+                "input_tokens": input_tokens,
                 "output_tokens": output_tokens
             }
         })

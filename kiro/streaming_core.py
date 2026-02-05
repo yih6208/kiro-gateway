@@ -279,7 +279,9 @@ async def _process_chunk(
             yield KiroEvent(type="usage", usage=event["data"])
         
         elif event["type"] == "context_usage":
-            yield KiroEvent(type="context_usage", context_usage_percentage=event["data"])
+            percentage = event["data"]
+            logger.debug(f"[Stream Parser] Context usage event: {percentage}%")
+            yield KiroEvent(type="context_usage", context_usage_percentage=percentage)
 
 
 # ==================================================================================================
@@ -342,13 +344,13 @@ def calculate_tokens_from_context_usage(
 ) -> Tuple[int, int, str, str]:
     """
     Calculate token counts from Kiro's context usage percentage.
-    
+
     Args:
         context_usage_percentage: Context usage percentage from Kiro API
         completion_tokens: Number of completion tokens (counted via tiktoken)
         model_cache: Model cache for getting max input tokens
         model: Model name
-    
+
     Returns:
         Tuple of (prompt_tokens, total_tokens, prompt_source, total_source)
     """
@@ -356,9 +358,17 @@ def calculate_tokens_from_context_usage(
         max_input_tokens = model_cache.get_max_input_tokens(model)
         total_tokens = int((context_usage_percentage / 100) * max_input_tokens)
         prompt_tokens = max(0, total_tokens - completion_tokens)
+        logger.debug(
+            f"[Token Calculation] Using context_usage_percentage={context_usage_percentage}%: "
+            f"max={max_input_tokens}, total={total_tokens}, completion={completion_tokens}, prompt={prompt_tokens}"
+        )
         return prompt_tokens, total_tokens, "subtraction", "API Kiro"
-    
+
     # Fallback: no context usage data
+    logger.warning(
+        f"[Token Calculation] No context_usage_percentage from Kiro API, using fallback. "
+        f"completion_tokens={completion_tokens}"
+    )
     return 0, completion_tokens, "unknown", "tiktoken"
 
 

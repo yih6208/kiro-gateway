@@ -233,15 +233,18 @@ async def stream_kiro_to_openai_internal(
         
         # Fallback: Kiro API didn't return context_usage, use tiktoken
         # Count prompt_tokens from original messages
-        # IMPORTANT: Don't apply correction coefficient for prompt_tokens,
-        # as it was calibrated for completion_tokens
+        # IMPORTANT: Apply correction coefficient for consistency with completion_tokens
         if prompt_source == "unknown" and request_messages:
-            prompt_tokens = count_message_tokens(request_messages, apply_claude_correction=False)
+            logger.warning(
+                f"[Token Fallback] Using tiktoken for prompt_tokens (no context_usage from Kiro). "
+                f"This may cause token count inaccuracy. Applying 1.15x correction for consistency."
+            )
+            prompt_tokens = count_message_tokens(request_messages, apply_claude_correction=True)
             if request_tools:
-                prompt_tokens += count_tools_tokens(request_tools, apply_claude_correction=False)
+                prompt_tokens += count_tools_tokens(request_tools, apply_claude_correction=True)
             total_tokens = prompt_tokens + completion_tokens
-            prompt_source = "tiktoken"
-            total_source = "tiktoken"
+            prompt_source = "tiktoken+correction"
+            total_source = "tiktoken+correction"
         
         # Send tool calls if present
         if all_tool_calls:
