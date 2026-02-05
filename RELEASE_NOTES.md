@@ -1,5 +1,24 @@
 # Release Notes
 
+## v2.3.2 (2026-02-05)
+
+**Git Commit:** `9beb847`
+**Docker Image:** `ghcr.io/yih6208/kiro-gateway:2.3.2`
+
+### Changes
+
+#### Bug Fixes
+- **Fix Claude Code auto-compact not triggering** (`9beb847`)
+  - Added `input_tokens` to Anthropic `message_delta` event
+  - Root cause: Claude Code needs accurate input_tokens from context_usage_percentage to determine when to trigger auto-compaction
+  - The initial input_tokens in message_start was estimated from tiktoken (less accurate), now we send the recalculated value from Kiro API's percentage in message_delta
+
+- **Consistent fallback token counting** (`9beb847`)
+  - Apply 1.15x Claude correction coefficient in fallback token counting for consistency
+  - Added debug logging for context_usage_percentage tracking
+
+---
+
 ## v2.3.1 (2026-02-05)
 
 **Git Commit:** `308ef5e`
@@ -73,5 +92,6 @@
 
 | Version | Date | Git Commit | Notes |
 |---------|------|------------|-------|
+| 2.3.2 | 2026-02-05 | `9beb847` | Fix Claude Code auto-compact token reporting |
 | 2.3.1 | 2026-02-05 | `308ef5e` | Upstream sync to v2.3, documentation improvements |
 | 2.2.1 | 2026-02-03 | `e5284b3` | Rate limiter, connection pool optimization |
