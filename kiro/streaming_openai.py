@@ -197,7 +197,10 @@ async def stream_kiro_to_openai_internal(
         # Track completion signals for truncation detection
         received_usage = metering_data is not None
         received_context_usage = context_usage_percentage is not None
-        stream_completed_normally = received_usage or received_context_usage
+        # Some models (e.g., claude-opus-4.6) don't send usage/contextUsage events,
+        # so we also consider the stream complete if we received any response content
+        has_response_content = len(full_content) > 0 or len(full_thinking_content) > 0 or len(tool_calls_from_stream) > 0
+        stream_completed_normally = received_usage or received_context_usage or has_response_content
         
         # Check bracket-style tool calls in full content
         bracket_tool_calls = parse_bracket_tool_calls(full_content)

@@ -310,50 +310,32 @@ async def messages(
     tools_for_tokenizer = [tool.model_dump() for tool in request_data.tools] if request_data.tools else None
 
     # Estimate token count from the actual payload that will be sent to Kiro API
-    # This includes all injected content (tool docs, thinking tags, etc.)
+    # Serialize the entire payload to get a comprehensive token count
+    estimated_input_tokens = None
     try:
         from kiro.tokenizer import count_tokens
+        import json as _json
 
-        # Extract the actual content that will be sent
-        conversation_state = kiro_payload.get("conversationState", {})
-        current_message = conversation_state.get("currentMessage", {})
-        user_input = current_message.get("userInputMessage", {})
-        history = conversation_state.get("history", [])
-
-        # Count tokens in current message content
-        current_content = user_input.get("content", "")
-        current_tokens = count_tokens(current_content)
-
-        # Count tokens in history
-        history_tokens = 0
-        for msg in history:
-            if "userInputMessage" in msg:
-                history_tokens += count_tokens(msg["userInputMessage"].get("content", ""))
-            elif "assistantResponseMessage" in msg:
-                history_tokens += count_tokens(msg["assistantResponseMessage"].get("content", ""))
-
-        # Count tokens in tools (rough estimate)
-        user_context = user_input.get("userInputMessageContext", {})
-        tools_spec = user_context.get("toolsSpecification", {})
-        tools_list = tools_spec.get("tools", [])
-        tools_tokens = len(str(tools_list)) // 4 if tools_list else 0  # Rough estimate: 1 token ≈ 4 chars
-
-        estimated_total_tokens = current_tokens + history_tokens + tools_tokens
+        payload_str = _json.dumps(kiro_payload, ensure_ascii=False)
+        # Apply correction factor: JSON structure overhead (keys, brackets, quotes)
+        # causes raw token count to overestimate by ~5-18%
+        from kiro.config import TOKEN_ESTIMATE_CORRECTION
+        estimated_input_tokens = int(count_tokens(payload_str) * TOKEN_ESTIMATE_CORRECTION)
 
         # Get max input tokens for the converted model
         max_input_tokens = model_cache.get_max_input_tokens(converted_model_id)
-        usage_percentage = (estimated_total_tokens / max_input_tokens * 100) if max_input_tokens > 0 else 0
+        usage_percentage = (estimated_input_tokens / max_input_tokens * 100) if max_input_tokens > 0 else 0
 
         logger.info(
             f"[Pre-Request Token Estimate] model={converted_model_id}, "
-            f"estimated_tokens={estimated_total_tokens} (current={current_tokens}, history={history_tokens}, tools={tools_tokens}), "
+            f"estimated_tokens={estimated_input_tokens}, "
             f"max_tokens={max_input_tokens}, usage={usage_percentage:.1f}%, "
             f"messages={len(messages_for_tokenizer)}, tools={len(tools_for_tokenizer) if tools_for_tokenizer else 0}"
         )
 
-        if estimated_total_tokens > max_input_tokens:
+        if estimated_input_tokens > max_input_tokens:
             logger.warning(
-                f"[Pre-Request Warning] Estimated tokens ({estimated_total_tokens}) "
+                f"[Pre-Request Warning] Estimated tokens ({estimated_input_tokens}) "
                 f"exceeds max input tokens ({max_input_tokens}) for model {converted_model_id}"
             )
     except Exception as e:
@@ -425,7 +407,8 @@ async def messages(
                         converted_model_id,  # Use converted model ID instead of original
                         model_cache,
                         auth_manager,
-                        request_messages=messages_for_tokenizer
+                        request_messages=messages_for_tokenizer,
+                        estimated_input_tokens=estimated_input_tokens
                     ):
                         yield chunk
                 except GeneratorExit:

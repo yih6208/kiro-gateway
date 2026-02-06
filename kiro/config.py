@@ -302,6 +302,13 @@ MODEL_CACHE_TTL: int = 3600
 # Default maximum number of input tokens
 DEFAULT_MAX_INPUT_TOKENS: int = 200000
 
+# Token estimation correction factor for pre-request estimates.
+# The gateway estimates input tokens by serializing the full Kiro payload and counting tokens.
+# JSON structure overhead (keys, brackets, quotes) causes overestimation by ~5-18%.
+# This factor adjusts the estimate closer to the actual value from Kiro API.
+# Default: 0.95 (reduces estimate by 5%)
+TOKEN_ESTIMATE_CORRECTION: float = float(os.getenv("TOKEN_ESTIMATE_CORRECTION", "0.95"))
+
 # ==================================================================================================
 # Tool Description Handling (Kiro API Limitations)
 # ==================================================================================================

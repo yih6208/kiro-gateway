@@ -269,7 +269,7 @@ class AwsEventStreamParser:
             self.buffer += chunk.decode('utf-8', errors='ignore')
         except Exception:
             return []
-        
+
         events = []
         
         while True:

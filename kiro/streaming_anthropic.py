@@ -105,14 +105,15 @@ async def stream_kiro_to_anthropic(
     auth_manager: "KiroAuthManager",
     first_token_timeout: float = FIRST_TOKEN_TIMEOUT,
     request_messages: Optional[list] = None,
-    conversation_id: Optional[str] = None
+    conversation_id: Optional[str] = None,
+    estimated_input_tokens: Optional[int] = None
 ) -> AsyncGenerator[str, None]:
     """
     Generator for converting Kiro stream to Anthropic SSE format.
-    
+
     Parses Kiro AWS SSE stream and converts events to Anthropic format.
     Supports thinking content blocks when FAKE_REASONING_HANDLING=as_reasoning_content.
-    
+
     Args:
         response: HTTP response with data stream
         model: Model name to include in response
@@ -121,7 +122,8 @@ async def stream_kiro_to_anthropic(
         first_token_timeout: First token wait timeout (seconds)
         request_messages: Original request messages (for token counting)
         conversation_id: Stable conversation ID for truncation recovery (optional)
-    
+        estimated_input_tokens: Pre-request token estimate from payload (optional)
+
     Yields:
         Strings in Anthropic SSE format
     
@@ -355,9 +357,33 @@ async def stream_kiro_to_anthropic(
             
             elif event.type == "context_usage" and event.context_usage_percentage is not None:
                 context_usage_percentage = event.context_usage_percentage
-        
+
+        # Log stream summary for debugging
+        if estimated_input_tokens is not None and context_usage_percentage is not None:
+            # Calculate actual input tokens from context usage
+            actual_input_tokens = int((context_usage_percentage / 100.0) * model_cache.get_max_input_tokens(model)) - output_tokens
+            token_diff = actual_input_tokens - estimated_input_tokens
+            token_ratio = (actual_input_tokens / estimated_input_tokens * 100) if estimated_input_tokens > 0 else 0
+            logger.info(
+                f"[Anthropic Stream Summary] model={model}, "
+                f"content_length={len(full_content)}, thinking_length={len(full_thinking_content)}, "
+                f"tool_blocks={len(tool_blocks)}, context_usage_percentage={context_usage_percentage}, "
+                f"estimated_input={estimated_input_tokens}, actual_input={actual_input_tokens}, "
+                f"diff={token_diff:+d} ({token_ratio:.1f}%)"
+            )
+        else:
+            logger.debug(
+                f"[Anthropic Stream Summary] model={model}, "
+                f"content_length={len(full_content)}, thinking_length={len(full_thinking_content)}, "
+                f"tool_blocks={len(tool_blocks)}, context_usage_percentage={context_usage_percentage}, "
+                f"text_block_started={text_block_started}, thinking_block_started={thinking_block_started}"
+            )
+
         # Track completion signals for truncation detection
-        stream_completed_normally = context_usage_percentage is not None
+        # Some models (e.g., claude-opus-4.6) don't send contextUsageEvent,
+        # so we also consider the stream complete if we received any response content
+        has_response_content = len(full_content) > 0 or len(full_thinking_content) > 0 or len(tool_blocks) > 0
+        stream_completed_normally = context_usage_percentage is not None or has_response_content
         
         # Check for bracket-style tool calls in full content
         bracket_tool_calls = parse_bracket_tool_calls(full_content)
@@ -465,7 +491,10 @@ async def stream_kiro_to_anthropic(
             )
             input_tokens = prompt_tokens
         else:
-            logger.warning(f"[Anthropic] No context_usage_percentage received from Kiro API")
+            # Some models (e.g., claude-opus-4.6) don't send contextUsageEvent
+            # Fall back to tiktoken-based estimation from request messages
+            logger.warning(f"[Anthropic] No context_usage_percentage received from Kiro API for model={model}, using initial token estimate")
+            # input_tokens already set from count_message_tokens at the top
         
         # Determine stop reason
         stop_reason = "tool_use" if tool_blocks else "end_turn"
@@ -663,7 +692,8 @@ async def stream_with_first_token_retry_anthropic(
     max_retries: int = FIRST_TOKEN_MAX_RETRIES,
     first_token_timeout: float = FIRST_TOKEN_TIMEOUT,
     request_messages: Optional[list] = None,
-    request_tools: Optional[list] = None
+    request_tools: Optional[list] = None,
+    estimated_input_tokens: Optional[int] = None
 ) -> AsyncGenerator[str, None]:
     """
     Streaming with automatic retry on first token timeout for Anthropic API.
@@ -718,7 +748,8 @@ async def stream_with_first_token_retry_anthropic(
             model_cache,
             auth_manager,
             first_token_timeout=first_token_timeout,
-            request_messages=request_messages
+            request_messages=request_messages,
+            estimated_input_tokens=estimated_input_tokens
         ):
             yield chunk
     
