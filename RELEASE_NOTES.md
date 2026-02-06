@@ -1,5 +1,28 @@
 # Release Notes
 
+## v2.3.5 (2026-02-06)
+
+**Git Commit:** `561fc49`
+**Docker Image:** `ghcr.io/yih6208/kiro-gateway:2.3.5`
+
+### Changes
+
+#### Bug Fixes
+- **Fix false truncation detection for claude-opus-4.6** (`561fc49`)
+  - Kiro API does not send `contextUsageEvent` for Opus 4.6
+  - Previously this caused every Opus 4.6 response to be flagged as truncated
+  - Now considers stream complete if any response content was received
+  - Applied to both Anthropic and OpenAI streaming paths
+
+#### Improvements
+- **Improved token estimation accuracy** (`561fc49`)
+  - Simplified estimation by serializing full Kiro payload instead of counting parts separately
+  - Added configurable `TOKEN_ESTIMATE_CORRECTION` factor (default 0.95, env var)
+  - Added estimated vs actual token comparison in stream summary log
+  - Removed verbose parser debug logs to reduce log noise
+
+---
+
 ## v2.3.4 (2026-02-06)
 
 **Git Commit:** `69caf7f`
@@ -153,6 +176,7 @@
 
 | Version | Date | Git Commit | Notes |
 |---------|------|------------|-------|
+| 2.3.5 | 2026-02-06 | `561fc49` | Fix Opus 4.6 false truncation, improved token estimation |
 | 2.3.4 | 2026-02-06 | `69caf7f` | Remove misleading sonnet 4.5-1m mapping, add pre-request token estimation |
 | 2.3.3 | 2026-02-06 | `c75dfcf` | Claude Opus 4.6 support, Sonnet 4.5 1M token calculation fix |
 | 2.3.2 | 2026-02-05 | `9beb847` | Fix Claude Code auto-compact token reporting |
