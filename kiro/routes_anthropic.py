@@ -456,7 +456,8 @@ async def messages(
                 converted_model_id,  # Use converted model ID instead of original
                 model_cache,
                 auth_manager,
-                request_messages=messages_for_tokenizer
+                request_messages=messages_for_tokenizer,
+                estimated_input_tokens=estimated_input_tokens
             )
             
             await http_client.close()

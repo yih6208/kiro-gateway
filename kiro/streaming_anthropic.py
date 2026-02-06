@@ -490,10 +490,16 @@ async def stream_kiro_to_anthropic(
                 context_usage_percentage, output_tokens, model_cache, model
             )
             input_tokens = prompt_tokens
-        else:
+        elif estimated_input_tokens is not None:
             # Some models (e.g., claude-opus-4.6) don't send contextUsageEvent
-            # Fall back to tiktoken-based estimation from request messages
-            logger.warning(f"[Anthropic] No context_usage_percentage received from Kiro API for model={model}, using initial token estimate")
+            # Use pre-request payload estimation as fallback (more accurate than tiktoken)
+            input_tokens = estimated_input_tokens
+            logger.warning(
+                f"[Anthropic] No context_usage_percentage for model={model}, "
+                f"using payload estimate: input_tokens={input_tokens}"
+            )
+        else:
+            logger.warning(f"[Anthropic] No context_usage_percentage and no payload estimate for model={model}, using tiktoken estimate")
             # input_tokens already set from count_message_tokens at the top
         
         # Determine stop reason
@@ -581,19 +587,21 @@ async def collect_anthropic_response(
     model: str,
     model_cache: "ModelInfoCache",
     auth_manager: "KiroAuthManager",
-    request_messages: Optional[list] = None
+    request_messages: Optional[list] = None,
+    estimated_input_tokens: Optional[int] = None
 ) -> dict:
     """
     Collect full response from Kiro stream in Anthropic format.
-    
+
     Used for non-streaming mode.
-    
+
     Args:
         response: HTTP response with stream
         model: Model name
         model_cache: Model cache
         auth_manager: Authentication manager
         request_messages: Original request messages (for token counting)
+        estimated_input_tokens: Pre-request token estimate from payload (optional)
     
     Returns:
         Dictionary with full response in Anthropic Messages format
@@ -659,6 +667,12 @@ async def collect_anthropic_response(
             result.context_usage_percentage, output_tokens, model_cache, model
         )
         input_tokens = prompt_tokens
+    elif estimated_input_tokens is not None:
+        input_tokens = estimated_input_tokens
+        logger.warning(
+            f"[Anthropic Non-Streaming] No context_usage_percentage for model={model}, "
+            f"using payload estimate: input_tokens={input_tokens}"
+        )
     
     # Determine stop reason
     stop_reason = "tool_use" if result.tool_calls else "end_turn"
