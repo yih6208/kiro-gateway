@@ -70,6 +70,37 @@
                             <div class="text-xs text-gray-400">
                                 In: {{ "{:,}".format(key.input_tokens) }} | Out: {{ "{:,}".format(key.output_tokens) }}
                             </div>
+                            {% if key.model_usage %}
+                            <div class="mt-2 border-t pt-2">
+                                <button onclick="toggleModelUsage({{ key.api_key_id }})" class="text-xs text-indigo-600 hover:text-indigo-900">
+                                    Per-model breakdown ({{ key.model_usage | length }})
+                                </button>
+                                <div id="model-usage-{{ key.api_key_id }}" class="hidden mt-1">
+                                    <table class="min-w-full text-xs">
+                                        <thead>
+                                            <tr class="text-gray-400">
+                                                <th class="text-left pr-2">Model</th>
+                                                <th class="text-right pr-2">Reqs</th>
+                                                <th class="text-right pr-2">In</th>
+                                                <th class="text-right pr-2">Out</th>
+                                                <th class="text-right">Total</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for mu in key.model_usage %}
+                                            <tr class="border-t border-gray-100">
+                                                <td class="pr-2 py-0.5 font-mono text-gray-600">{{ mu.model }}</td>
+                                                <td class="text-right pr-2">{{ "{:,}".format(mu.requests) }}</td>
+                                                <td class="text-right pr-2">{{ "{:,}".format(mu.input_tokens) }}</td>
+                                                <td class="text-right pr-2">{{ "{:,}".format(mu.output_tokens) }}</td>
+                                                <td class="text-right font-semibold">{{ "{:,}".format(mu.total_tokens) }}</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            {% endif %}
                         </div>
                     </td>
                     <td class="px-6 py-4 text-sm text-gray-500">
@@ -263,6 +294,11 @@ function openEditLimitsModal(keyId, currentTokenLimit, currentRequestLimit) {
 function closeEditLimitsModal() {
     const modal = document.getElementById('editLimitsModal');
     modal.classList.add('hidden');
+}
+
+function toggleModelUsage(keyId) {
+    const el = document.getElementById(`model-usage-${keyId}`);
+    el.classList.toggle('hidden');
 }
 </script>
 {% endblock %}

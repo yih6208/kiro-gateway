@@ -208,6 +208,44 @@ class APIKeyManager:
                 "output_tokens": row.output_tokens or 0,
             }
 
+    async def get_usage_by_model(self, api_key_id: int) -> list[dict]:
+        """
+        Get usage statistics for an API key grouped by model.
+
+        Args:
+            api_key_id: API key ID
+
+        Returns:
+            List of dicts with per-model usage stats
+        """
+        async with self.db.SessionLocal() as session:
+            stmt = (
+                select(
+                    UsageRecord.model,
+                    func.count(UsageRecord.id).label("requests"),
+                    func.sum(UsageRecord.input_tokens).label("input_tokens"),
+                    func.sum(UsageRecord.output_tokens).label("output_tokens"),
+                    func.sum(UsageRecord.total_tokens).label("total_tokens"),
+                )
+                .where(UsageRecord.api_key_id == api_key_id)
+                .group_by(UsageRecord.model)
+                .order_by(func.sum(UsageRecord.total_tokens).desc())
+            )
+
+            result = await session.execute(stmt)
+            rows = result.all()
+
+            return [
+                {
+                    "model": row.model,
+                    "requests": row.requests or 0,
+                    "input_tokens": row.input_tokens or 0,
+                    "output_tokens": row.output_tokens or 0,
+                    "total_tokens": row.total_tokens or 0,
+                }
+                for row in rows
+            ]
+
     async def check_usage_limits(self, api_key_id: int) -> tuple[bool, Optional[str]]:
         """
         Check if API key has exceeded usage limits.
@@ -296,6 +334,7 @@ class APIKeyManager:
             keys_with_stats = []
             for key in keys:
                 stats = await self.get_usage_stats(key.id)
+                model_usage = await self.get_usage_by_model(key.id)
                 keys_with_stats.append({
                     "api_key_id": key.id,
                     "key_id": key.key_id,
@@ -312,6 +351,7 @@ class APIKeyManager:
                     "total_requests": stats["total_requests"],
                     "input_tokens": stats["input_tokens"],
                     "output_tokens": stats["output_tokens"],
+                    "model_usage": model_usage,
                 })
 
             return keys_with_stats

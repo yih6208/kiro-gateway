@@ -128,6 +128,12 @@ def list_keys():
                 click.echo(f"    Usage: {key['total_requests']:,} requests, {key['total_tokens']:,} tokens")
                 click.echo(f"           (Input: {key['input_tokens']:,}, Output: {key['output_tokens']:,})")
 
+                # Display per-model breakdown
+                if key.get('model_usage'):
+                    click.echo(f"    Per-model breakdown:")
+                    for mu in key['model_usage']:
+                        click.echo(f"      {mu['model']}: {mu['requests']:,} reqs, {mu['total_tokens']:,} tokens (in: {mu['input_tokens']:,}, out: {mu['output_tokens']:,})")
+
                 # Display limits if set
                 if key.get('usage_limit_tokens') or key.get('usage_limit_requests'):
                     limits = []
