@@ -227,27 +227,6 @@ HIDDEN_MODELS: Dict[str, str] = {
     # Hidden in Kiro API but functional. Great for users who prefer it.
     "claude-3.7-sonnet": "CLAUDE_3_7_SONNET_20250219_V1_0",
 
-    # NOTE: claude-sonnet-4.5-1m mapping removed (2026-02-06)
-    #
-    # Testing Results:
-    # - "claude-sonnet-4.5-1m" appears in ListAvailableModels with maxInputTokens=1000000
-    # - Kiro API accepts this model ID and returns context_usage_percentage based on 1M
-    # - However, actual testing shows it has the SAME 200K limit as "claude-sonnet-4.5"
-    #
-    # Evidence:
-    # - Both models succeed with 251 messages (~196K tokens)
-    # - Both models fail with 253 messages (~198K tokens) - "Input is too long"
-    # - Only difference: context_usage_percentage calculation
-    #   * claude-sonnet-4.5: 98.22% (based on 200K) - accurate
-    #   * claude-sonnet-4.5-1m: 19.65% (based on 1M) - misleading
-    #
-    # Conclusion:
-    # - Using this mapping causes confusion by showing low usage (19%) when actually near limit (98%)
-    # - May be a Kiro API metadata error, or requires paid subscription for actual 1M context
-    # - Removed to avoid misleading users about actual context availability
-    #
-    # Previous mapping: "claude-sonnet-4.5": "claude-sonnet-4.5-1m"
-
     # Add other hidden/experimental models here as discovered.
     # Example: "claude-secret-model": "INTERNAL_SECRET_MODEL_ID",
 }

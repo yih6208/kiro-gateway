@@ -308,7 +308,57 @@ async def messages(
     # Convert Pydantic models to dicts for tokenizer
     messages_for_tokenizer = [msg.model_dump() for msg in request_data.messages]
     tools_for_tokenizer = [tool.model_dump() for tool in request_data.tools] if request_data.tools else None
-    
+
+    # Estimate token count from the actual payload that will be sent to Kiro API
+    # This includes all injected content (tool docs, thinking tags, etc.)
+    try:
+        from kiro.tokenizer import count_tokens
+
+        # Extract the actual content that will be sent
+        conversation_state = kiro_payload.get("conversationState", {})
+        current_message = conversation_state.get("currentMessage", {})
+        user_input = current_message.get("userInputMessage", {})
+        history = conversation_state.get("history", [])
+
+        # Count tokens in current message content
+        current_content = user_input.get("content", "")
+        current_tokens = count_tokens(current_content)
+
+        # Count tokens in history
+        history_tokens = 0
+        for msg in history:
+            if "userInputMessage" in msg:
+                history_tokens += count_tokens(msg["userInputMessage"].get("content", ""))
+            elif "assistantResponseMessage" in msg:
+                history_tokens += count_tokens(msg["assistantResponseMessage"].get("content", ""))
+
+        # Count tokens in tools (rough estimate)
+        user_context = user_input.get("userInputMessageContext", {})
+        tools_spec = user_context.get("toolsSpecification", {})
+        tools_list = tools_spec.get("tools", [])
+        tools_tokens = len(str(tools_list)) // 4 if tools_list else 0  # Rough estimate: 1 token ≈ 4 chars
+
+        estimated_total_tokens = current_tokens + history_tokens + tools_tokens
+
+        # Get max input tokens for the converted model
+        max_input_tokens = model_cache.get_max_input_tokens(converted_model_id)
+        usage_percentage = (estimated_total_tokens / max_input_tokens * 100) if max_input_tokens > 0 else 0
+
+        logger.info(
+            f"[Pre-Request Token Estimate] model={converted_model_id}, "
+            f"estimated_tokens={estimated_total_tokens} (current={current_tokens}, history={history_tokens}, tools={tools_tokens}), "
+            f"max_tokens={max_input_tokens}, usage={usage_percentage:.1f}%, "
+            f"messages={len(messages_for_tokenizer)}, tools={len(tools_for_tokenizer) if tools_for_tokenizer else 0}"
+        )
+
+        if estimated_total_tokens > max_input_tokens:
+            logger.warning(
+                f"[Pre-Request Warning] Estimated tokens ({estimated_total_tokens}) "
+                f"exceeds max input tokens ({max_input_tokens}) for model {converted_model_id}"
+            )
+    except Exception as e:
+        logger.debug(f"Failed to estimate tokens from payload: {e}")
+
     try:
         # Make request to Kiro API (for both streaming and non-streaming modes)
         # Important: we wait for Kiro response BEFORE returning StreamingResponse,
