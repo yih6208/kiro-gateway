@@ -1,5 +1,28 @@
 # Release Notes
 
+## v2.3.4 (2026-02-06)
+
+**Git Commit:** `69caf7f`
+**Docker Image:** `ghcr.io/yih6208/kiro-gateway:2.3.4`
+
+### Changes
+
+#### Bug Fixes
+- **Remove claude-sonnet-4.5-1m mapping due to misleading context limits** (`791b973`)
+  - Removed HIDDEN_MODELS mapping: `"claude-sonnet-4.5"` -> `"claude-sonnet-4.5-1m"`
+  - Testing confirmed that `claude-sonnet-4.5-1m` has the same 200K actual limit as `claude-sonnet-4.5`
+  - The 1M metadata from Kiro API is misleading — both models fail at ~198K tokens
+  - The mapping caused confusing usage percentages (19% shown when actually at 98%)
+
+#### Improvements
+- **Pre-request token estimation from actual Kiro payload** (`69caf7f`)
+  - Added token estimation that reads from the converted Kiro payload (not raw Anthropic messages)
+  - Includes all injected content: tool documentation, thinking tags, history
+  - Logs estimated token count, max tokens, and usage percentage before sending request
+  - Warns when estimated tokens exceed model's max input tokens
+
+---
+
 ## v2.3.3 (2026-02-06)
 
 **Git Commit:** `c75dfcf`
@@ -130,6 +153,8 @@
 
 | Version | Date | Git Commit | Notes |
 |---------|------|------------|-------|
+| 2.3.4 | 2026-02-06 | `69caf7f` | Remove misleading sonnet 4.5-1m mapping, add pre-request token estimation |
+| 2.3.3 | 2026-02-06 | `c75dfcf` | Claude Opus 4.6 support, Sonnet 4.5 1M token calculation fix |
 | 2.3.2 | 2026-02-05 | `9beb847` | Fix Claude Code auto-compact token reporting |
 | 2.3.1 | 2026-02-05 | `308ef5e` | Upstream sync to v2.3, documentation improvements |
 | 2.2.1 | 2026-02-03 | `e5284b3` | Rate limiter, connection pool optimization |
