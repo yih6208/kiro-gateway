@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Optional
 
 from loguru import logger
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 
 from kiro.database import Database, UsageRecord
 
@@ -134,6 +134,14 @@ class UsageTracker:
                 func.sum(UsageRecord.output_tokens).label("total_output_tokens"),
                 func.sum(UsageRecord.total_tokens).label("total_tokens"),
                 func.avg(UsageRecord.request_duration_ms).label("avg_duration_ms"),
+                func.sum(case(
+                    (UsageRecord.status_code.between(200, 299), 1),
+                    else_=0
+                )).label("success_count"),
+                func.sum(case(
+                    (UsageRecord.status_code >= 400, 1),
+                    else_=0
+                )).label("fail_count"),
             )
 
             # Apply filters
@@ -155,6 +163,8 @@ class UsageTracker:
                 "total_output_tokens": row.total_output_tokens or 0,
                 "total_tokens": row.total_tokens or 0,
                 "avg_duration_ms": float(row.avg_duration_ms) if row.avg_duration_ms else 0.0,
+                "success_count": row.success_count or 0,
+                "fail_count": row.fail_count or 0,
             }
 
     async def get_usage_by_model(
@@ -181,6 +191,14 @@ class UsageTracker:
                 func.sum(UsageRecord.input_tokens).label("input_tokens"),
                 func.sum(UsageRecord.output_tokens).label("output_tokens"),
                 func.sum(UsageRecord.total_tokens).label("total_tokens"),
+                func.sum(case(
+                    (UsageRecord.status_code.between(200, 299), 1),
+                    else_=0
+                )).label("success_count"),
+                func.sum(case(
+                    (UsageRecord.status_code >= 400, 1),
+                    else_=0
+                )).label("fail_count"),
             ).group_by(UsageRecord.model)
 
             # Apply filters
@@ -203,6 +221,8 @@ class UsageTracker:
                     "input_tokens": row.input_tokens or 0,
                     "output_tokens": row.output_tokens or 0,
                     "total_tokens": row.total_tokens or 0,
+                    "success_count": row.success_count or 0,
+                    "fail_count": row.fail_count or 0,
                 }
                 for row in rows
             ]
