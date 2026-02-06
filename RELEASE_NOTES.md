@@ -1,5 +1,43 @@
 # Release Notes
 
+## v2.3.3 (2026-02-06)
+
+**Git Commit:** `c75dfcf`
+**Docker Image:** `ghcr.io/yih6208/kiro-gateway:2.3.3`
+
+### Changes
+
+#### Features
+- **Claude Opus 4.6 Support** (`c75dfcf`)
+  - Added Claude Opus 4.6 model with 16K max output tokens
+  - Updated all language documentation (8 languages) with Opus 4.6 announcement
+  - Added to FALLBACK_MODELS for DNS/network failure resilience
+  - Test fixtures updated with proper token limits (200K input, 16K output)
+
+#### Bug Fixes
+- **Fix token calculation for Claude Sonnet 4.5 (1M context)** (`c75dfcf`)
+  - **Critical Fix**: Token calculation now correctly uses 1M context limit instead of 200K
+  - Root cause: Streaming functions used original request model ID instead of converted model ID
+  - Solution: Extract converted model ID from kiro_payload and pass to streaming functions
+  - Impact: Large conversations (257+ messages) no longer fail with "Input is too long" error
+  - Before: `[Token Calculation] max=200000`
+  - After: `[Token Calculation] max=1000000`
+
+#### Improvements
+- **Enhanced model logging at startup** (`c75dfcf`)
+  - Added detailed token limits logging for all models from Kiro API
+  - Shows maxInputTokens and maxOutputTokens for each model
+  - Added error handling for None model entries
+  - Helps diagnose model availability and token limit issues
+
+#### Technical Details
+- Modified `routes_anthropic.py` to extract converted model ID from payload
+- Pass `converted_model_id` to `stream_kiro_to_anthropic` and `collect_anthropic_response`
+- Added debug logs: "Converted model ID for token calculation" and "[Streaming/Non-streaming] Using model ID"
+- Updated `main.py` with try-except for robust model logging
+
+---
+
 ## v2.3.2 (2026-02-05)
 
 **Git Commit:** `9beb847`
