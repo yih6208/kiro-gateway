@@ -1,0 +1,146 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Kiro Accounts - Kiro Gateway Admin{% endblock %}
+
+{% block content %}
+<div class="px-4 py-6 sm:px-0">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-3xl font-bold text-gray-900">Kiro Accounts</h1>
+        <a href="/admin/kiro-accounts/oauth/start"
+           class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700">
+            Add Account via OAuth
+        </a>
+    </div>
+
+    <!-- Success/Error Messages -->
+    {% if request.query_params.get('success') == 'oauth' %}
+    <div class="mb-6 bg-green-50 border-l-4 border-green-400 p-4">
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <svg class="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                </svg>
+            </div>
+            <div class="ml-3">
+                <p class="text-sm text-green-700">Account added successfully via OAuth!</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if request.query_params.get('success') == 'refresh' %}
+    <div class="mb-6 bg-green-50 border-l-4 border-green-400 p-4">
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <svg class="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                </svg>
+            </div>
+            <div class="ml-3">
+                <p class="text-sm text-green-700">Token refreshed successfully!</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if request.query_params.get('error') %}
+    <div class="mb-6 bg-red-50 border-l-4 border-red-400 p-4">
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <svg class="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                </svg>
+            </div>
+            <div class="ml-3">
+                <p class="text-sm text-red-700">Error: {{ request.query_params.get('error') }}</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Accounts Table -->
+    <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Auth Type</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Region</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Health</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Success</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                {% for account in accounts %}
+                <tr>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ account.name }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {% if account.auth_type == 'aws_sso_oidc' %}
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">AWS SSO</span>
+                        {% else %}
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-100 text-purple-800">Kiro Desktop</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ account.region }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        {% if account.is_active %}
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Active</span>
+                        {% else %}
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Inactive</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {% if account.error_count == 0 %}
+                        <span class="text-green-600">Healthy</span>
+                        {% elif account.error_count < 3 %}
+                        <span class="text-yellow-600">{{ account.error_count }} errors</span>
+                        {% else %}
+                        <span class="text-red-600">{{ account.error_count }} errors</span>
+                        {% endif %}
+                        {% if account.last_error %}
+                        <div class="text-xs text-gray-400 mt-1 truncate max-w-xs" title="{{ account.last_error }}">{{ account.last_error }}</div>
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {{ account.last_success_at or 'Never' }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                        <form action="/admin/kiro-accounts/{{ account.id }}/toggle" method="POST" class="inline">
+                            <button type="submit" class="text-indigo-600 hover:text-indigo-900">
+                                {% if account.is_active %}Deactivate{% else %}Activate{% endif %}
+                            </button>
+                        </form>
+                        <form action="/admin/kiro-accounts/{{ account.id }}/refresh" method="POST" class="inline">
+                            <button type="submit" class="text-green-600 hover:text-green-900">Refresh</button>
+                        </form>
+                        <form action="/admin/kiro-accounts/{{ account.id }}/delete" method="POST" class="inline"
+                              onsubmit="return confirm('Are you sure you want to permanently delete this account? This cannot be undone.')">
+                            <button type="submit" class="text-red-600 hover:text-red-900">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Help Text -->
+    <div class="mt-6 bg-blue-50 border-l-4 border-blue-400 p-4">
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <svg class="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                </svg>
+            </div>
+            <div class="ml-3">
+                <p class="text-sm text-blue-700">
+                    <strong>How to add accounts:</strong> Click "Add Account via OAuth" to authenticate with AWS IAM Identity Center.
+                    The gateway will automatically load balance requests across all active accounts.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

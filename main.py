@@ -80,6 +80,12 @@ from kiro.config import (
     RATE_LIMIT_MAX_CONCURRENT,
     RATE_LIMIT_MIN_INTERVAL,
     RATE_LIMIT_429_BACKOFF,
+    DATABASE_URL,
+    ENCRYPTION_KEY,
+    OAUTH_START_URL,
+    OAUTH_REGION,
+    ADMIN_SESSION_SECRET,
+    ACCOUNT_POOL_ERROR_THRESHOLD,
     _warn_timeout_configuration,
 )
 from kiro.auth import KiroAuthManager
@@ -88,8 +94,14 @@ from kiro.model_resolver import ModelResolver
 from kiro.rate_limiter import init_rate_limiter
 from kiro.routes_openai import router as openai_router
 from kiro.routes_anthropic import router as anthropic_router
+from kiro.routes_admin import router as admin_router
 from kiro.exceptions import validation_exception_handler
 from kiro.debug_middleware import DebugLoggerMiddleware
+from kiro.database import Database
+from kiro.api_key_manager import APIKeyManager
+from kiro.account_pool import AccountPool
+from kiro.oauth_flow import OAuthFlowManager
+from kiro.usage_tracker import UsageTracker
 
 
 # --- Loguru Configuration ---
@@ -211,83 +223,43 @@ if VPN_PROXY_URL:
 def validate_configuration() -> None:
     """
     Validates that required configuration is present.
-    
+
     Checks:
-    - Either REFRESH_TOKEN, KIRO_CREDS_FILE, or KIRO_CLI_DB_FILE is configured
+    - Multi-tenant mode: ENCRYPTION_KEY and ADMIN_SESSION_SECRET are required
+    - Either credentials in database or legacy REFRESH_TOKEN/KIRO_CREDS_FILE/KIRO_CLI_DB_FILE
     - Supports both .env file (local) and environment variables (Docker)
-    
+
     Raises:
         SystemExit: If critical configuration is missing
     """
     errors = []
-    
+
     # Check if .env file exists (optional - can use environment variables)
     env_file = Path(".env")
-    
-    # Check for credentials (from .env or environment variables)
-    has_refresh_token = bool(REFRESH_TOKEN)
-    has_creds_file = bool(KIRO_CREDS_FILE)
-    has_cli_db = bool(KIRO_CLI_DB_FILE)
-    
-    # Check if creds file actually exists
-    if KIRO_CREDS_FILE:
-        creds_path = Path(KIRO_CREDS_FILE).expanduser()
-        if not creds_path.exists():
-            has_creds_file = False
-            logger.warning(f"KIRO_CREDS_FILE not found: {KIRO_CREDS_FILE}")
-    
-    # Check if CLI database file actually exists
-    if KIRO_CLI_DB_FILE:
-        cli_db_path = Path(KIRO_CLI_DB_FILE).expanduser()
-        if not cli_db_path.exists():
-            has_cli_db = False
-            logger.warning(f"KIRO_CLI_DB_FILE not found: {KIRO_CLI_DB_FILE}")
-    
-    # If no credentials found, show helpful error
-    if not has_refresh_token and not has_creds_file and not has_cli_db:
-        if not env_file.exists():
-            # No .env file and no environment variables
-            errors.append(
-                "No Kiro credentials configured!\n"
-                "\n"
-                "To get started:\n"
-                "1. Create .env file:\n"
-                "   cp .env.example .env\n"
-                "\n"
-                "2. Edit .env and configure your credentials:\n"
-                "   2.1. Set you super-secret password as PROXY_API_KEY\n"
-                "   2.2. Set your Kiro credentials:\n"
-                "      - Option 1: KIRO_CREDS_FILE to your Kiro credentials JSON file\n"
-                "      - Option 2: REFRESH_TOKEN from Kiro IDE traffic\n"
-                "      - Option 3: KIRO_CLI_DB_FILE to kiro-cli SQLite database\n"
-                "\n"
-                "Or use environment variables (for Docker):\n"
-                "   docker run -e PROXY_API_KEY=\"...\" -e REFRESH_TOKEN=\"...\" ...\n"
-                "\n"
-                "See README.md for detailed instructions."
-            )
-        else:
-            # .env exists but no credentials configured
-            errors.append(
-                "No Kiro credentials configured!\n"
-                "\n"
-                "   Configure one of the following in your .env file:\n"
-                "\n"
-                "Set you super-secret password as PROXY_API_KEY\n"
-                "   PROXY_API_KEY=\"my-super-secret-password-123\"\n"
-                "\n"
-                "   Option 1 (Recommended): JSON credentials file\n"
-                "      KIRO_CREDS_FILE=\"path/to/your/kiro-credentials.json\"\n"
-                "\n"
-                "   Option 2: Refresh token\n"
-                "      REFRESH_TOKEN=\"your_refresh_token_here\"\n"
-                "\n"
-                "   Option 3: kiro-cli SQLite database (AWS SSO)\n"
-                "      KIRO_CLI_DB_FILE=\"~/.local/share/kiro-cli/data.sqlite3\"\n"
-                "\n"
-                "   See README.md for how to obtain credentials."
-            )
-    
+
+    # Multi-tenant mode validation
+    if not ENCRYPTION_KEY:
+        errors.append(
+            "ENCRYPTION_KEY is required for multi-tenant mode!\n"
+            "\n"
+            "Generate a key with:\n"
+            "  python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\"\n"
+            "\n"
+            "Then add to .env:\n"
+            "  ENCRYPTION_KEY=\"your-generated-key-here\"\n"
+        )
+
+    if not ADMIN_SESSION_SECRET:
+        errors.append(
+            "ADMIN_SESSION_SECRET is required for admin authentication!\n"
+            "\n"
+            "Generate a secret with:\n"
+            "  python -c \"import secrets; print(secrets.token_urlsafe(32))\"\n"
+            "\n"
+            "Then add to .env:\n"
+            "  ADMIN_SESSION_SECRET=\"your-generated-secret-here\"\n"
+        )
+
     # Print errors and exit if any
     if errors:
         logger.error("")
@@ -300,8 +272,6 @@ def validate_configuration() -> None:
         logger.error("=" * 60)
         logger.error("")
         sys.exit(1)
-    
-    # Note: Credential loading details are logged by KiroAuthManager
 
 
 # --- Lifespan Manager ---
@@ -309,12 +279,16 @@ def validate_configuration() -> None:
 async def lifespan(app: FastAPI):
     """
     Manages the application lifecycle.
-    
+
     Creates and initializes:
+    - Database for multi-tenant storage
+    - API key manager for client authentication
+    - Account pool for load balancing across Kiro accounts
+    - OAuth flow manager for IAM SSO integration
+    - Usage tracker for analytics
     - Shared HTTP client with connection pooling
-    - KiroAuthManager for token management
-    - ModelInfoCache for model caching
-    
+    - Model cache and resolver
+
     The shared HTTP client is used by all requests to reduce memory usage
     and enable connection reuse. This is especially important for handling
     concurrent requests efficiently (fixes issue #24).
@@ -332,12 +306,13 @@ async def lifespan(app: FastAPI):
     logger.info(f"Log Level: {LOG_LEVEL}")
     logger.info(f"Debug Mode: {os.getenv('DEBUG_MODE', 'off')}")
     logger.info("-" * 80)
-    logger.info("Authentication Configuration:")
-    logger.info(f"  KIRO_CLI_DB_FILE: {KIRO_CLI_DB_FILE if KIRO_CLI_DB_FILE else 'Not set'}")
-    logger.info(f"  KIRO_CREDS_FILE: {KIRO_CREDS_FILE if KIRO_CREDS_FILE else 'Not set'}")
-    logger.info(f"  REFRESH_TOKEN: {'Set (hidden)' if REFRESH_TOKEN else 'Not set'}")
-    logger.info(f"  PROFILE_ARN: {PROFILE_ARN if PROFILE_ARN else 'Not set'}")
-    logger.info(f"  PROXY_API_KEY: {'Set (hidden)' if PROXY_API_KEY else 'Not set'}")
+    logger.info("Multi-Tenant Configuration:")
+    logger.info(f"  DATABASE_URL: {DATABASE_URL}")
+    logger.info(f"  ENCRYPTION_KEY: {'Set (hidden)' if ENCRYPTION_KEY else 'Not set'}")
+    logger.info(f"  ADMIN_SESSION_SECRET: {'Set (hidden)' if ADMIN_SESSION_SECRET else 'Not set'}")
+    logger.info(f"  OAUTH_START_URL: {OAUTH_START_URL}")
+    logger.info(f"  OAUTH_REGION: {OAUTH_REGION}")
+    logger.info(f"  ACCOUNT_POOL_ERROR_THRESHOLD: {ACCOUNT_POOL_ERROR_THRESHOLD}")
     logger.info("-" * 80)
     logger.info("HTTP Connection Pool Configuration:")
     logger.info(f"  HTTP_MAX_CONNECTIONS: {HTTP_MAX_CONNECTIONS}")
@@ -360,6 +335,23 @@ async def lifespan(app: FastAPI):
     logger.info("-" * 80)
     logger.info("Hidden Models: " + (", ".join(HIDDEN_MODELS) if HIDDEN_MODELS else "None"))
     logger.info("=" * 80)
+
+    # Initialize database
+    logger.info("Initializing database...")
+    app.state.db = Database(DATABASE_URL, ENCRYPTION_KEY)
+    await app.state.db.init_db()
+    logger.info("Database initialized")
+
+    # Initialize multi-tenant managers
+    logger.info("Initializing multi-tenant managers...")
+    app.state.api_key_manager = APIKeyManager(app.state.db)
+    app.state.account_pool = AccountPool(app.state.db, ACCOUNT_POOL_ERROR_THRESHOLD)
+    app.state.oauth_manager = OAuthFlowManager(
+        region=OAUTH_REGION,
+        start_url=OAUTH_START_URL,
+    )
+    app.state.usage_tracker = UsageTracker(app.state.db)
+    logger.info("Multi-tenant managers initialized")
 
     # Initialize global rate limiter (if enabled)
     init_rate_limiter(
@@ -396,96 +388,99 @@ async def lifespan(app: FastAPI):
         follow_redirects=True
     )
     logger.info("Shared HTTP client created with connection pooling")
-    
-    # Create AuthManager
-    # Priority: SQLite DB > JSON file > environment variables
-    app.state.auth_manager = KiroAuthManager(
-        refresh_token=REFRESH_TOKEN,
-        profile_arn=PROFILE_ARN,
-        region=REGION,
-        creds_file=KIRO_CREDS_FILE if KIRO_CREDS_FILE else None,
-        sqlite_db=KIRO_CLI_DB_FILE if KIRO_CLI_DB_FILE else None,
-    )
-    
+
     # Create model cache
     app.state.model_cache = ModelInfoCache()
-    
+
     # BLOCKING: Load models from Kiro API at startup
     # This ensures the cache is populated BEFORE accepting any requests.
     # No race conditions - requests only start after yield.
+    # Note: In multi-tenant mode, we try to load models from any available account
     logger.info("Loading models from Kiro API...")
     try:
-        token = await app.state.auth_manager.get_access_token()
-        from kiro.utils import get_kiro_headers
-        from kiro.auth import AuthType
-        headers = get_kiro_headers(app.state.auth_manager, token)
-        
-        # Build params - profileArn is only needed for Kiro Desktop auth
-        params = {"origin": "AI_EDITOR"}
-        if app.state.auth_manager.auth_type == AuthType.KIRO_DESKTOP and app.state.auth_manager.profile_arn:
-            params["profileArn"] = app.state.auth_manager.profile_arn
-        
-        list_models_url = f"{app.state.auth_manager.q_host}/ListAvailableModels"
-        logger.debug(f"Fetching models from: {list_models_url}")
-        
-        async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.get(
-                list_models_url,
-                headers=headers,
-                params=params
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                models_list = data.get("models", [])
-                await app.state.model_cache.update(models_list)
-                logger.info(f"Successfully loaded {len(models_list)} models from Kiro API:")
+        # Try to get an account from the pool
+        accounts = await app.state.account_pool.list_accounts()
+        if accounts and any(acc['is_active'] for acc in accounts):
+            # Use first active account to load models
+            account_id, auth_manager = await app.state.account_pool.get_account()
 
-                # Log each model with detailed error handling
-                for idx, model in enumerate(models_list):
-                    try:
-                        if model is None:
-                            logger.warning(f"  - [Index {idx}] Skipping None model entry")
-                            continue
+            token = await auth_manager.get_access_token()
+            from kiro.utils import get_kiro_headers
+            from kiro.auth import AuthType
+            headers = get_kiro_headers(auth_manager, token)
 
-                        model_id = model.get("modelId", "unknown")
-                        display_name = model.get("displayName", model_id)
-                        token_limits = model.get("tokenLimits", {})
+            # Build params - profileArn is only needed for Kiro Desktop auth
+            params = {"origin": "AI_EDITOR"}
+            if auth_manager.auth_type == AuthType.KIRO_DESKTOP and auth_manager.profile_arn:
+                params["profileArn"] = auth_manager.profile_arn
 
-                        if token_limits is None:
-                            token_limits = {}
+            list_models_url = f"{auth_manager.q_host}/ListAvailableModels"
+            logger.debug(f"Fetching models from: {list_models_url}")
 
-                        max_input = token_limits.get("maxInputTokens", "N/A")
-                        max_output = token_limits.get("maxOutputTokens", "N/A")
+            async with httpx.AsyncClient(timeout=30) as client:
+                response = await client.get(
+                    list_models_url,
+                    headers=headers,
+                    params=params
+                )
 
-                        logger.info(f"  - {display_name} ({model_id})")
-                        logger.debug(f"    Token limits: maxInput={max_input}, maxOutput={max_output}")
-                    except Exception as e:
-                        logger.error(f"  - [Index {idx}] Error processing model: {e}")
-                        logger.debug(f"    Model data: {model}")
-            else:
-                raise Exception(f"HTTP {response.status_code}")
+                if response.status_code == 200:
+                    data = response.json()
+                    models_list = data.get("models", [])
+                    await app.state.model_cache.update(models_list)
+                    logger.info(f"Successfully loaded {len(models_list)} models from Kiro API:")
+
+                    # Log each model with detailed error handling
+                    for idx, model in enumerate(models_list):
+                        try:
+                            if model is None:
+                                logger.warning(f"  - [Index {idx}] Skipping None model entry")
+                                continue
+
+                            model_id = model.get("modelId", "unknown")
+                            display_name = model.get("displayName", model_id)
+                            token_limits = model.get("tokenLimits", {})
+
+                            if token_limits is None:
+                                token_limits = {}
+
+                            max_input = token_limits.get("maxInputTokens", "N/A")
+                            max_output = token_limits.get("maxOutputTokens", "N/A")
+
+                            logger.info(f"  - {display_name} ({model_id})")
+                            logger.debug(f"    Token limits: maxInput={max_input}, maxOutput={max_output}")
+                        except Exception as e:
+                            logger.error(f"  - [Index {idx}] Error processing model: {e}")
+                            logger.debug(f"    Model data: {model}")
+
+                    # Report success
+                    await app.state.account_pool.report_success(account_id)
+                else:
+                    raise Exception(f"HTTP {response.status_code}")
+        else:
+            logger.warning("No active Kiro accounts found. Using fallback models.")
+            raise Exception("No active accounts")
     except Exception as e:
         # FALLBACK: Use built-in model list
         logger.error(f"Failed to fetch models from Kiro API: {e}")
         logger.error("Using pre-configured fallback models. Not all models may be available on your plan, or the list may be outdated.")
-        
+
         # Populate cache with fallback models
         await app.state.model_cache.update(FALLBACK_MODELS)
         logger.debug(f"Loaded {len(FALLBACK_MODELS)} fallback models")
-    
+
     # Add hidden models to cache (they appear in /v1/models but not in Kiro API)
     # Hidden models are added ALWAYS, regardless of API success/failure
     for display_name, internal_id in HIDDEN_MODELS.items():
         app.state.model_cache.add_hidden_model(display_name, internal_id)
-    
+
     if HIDDEN_MODELS:
         logger.debug(f"Added {len(HIDDEN_MODELS)} hidden models to cache")
-    
+
     # Log final cache state
     all_models = app.state.model_cache.get_all_model_ids()
     logger.info(f"Model cache ready: {len(all_models)} models total")
-    
+
     # Create model resolver (uses cache + hidden models + aliases for resolution)
     app.state.model_resolver = ModelResolver(
         cache=app.state.model_cache,
@@ -494,22 +489,38 @@ async def lifespan(app: FastAPI):
         hidden_from_list=HIDDEN_FROM_LIST
     )
     logger.info("Model resolver initialized")
-    
+
     # Log alias configuration if any
     if MODEL_ALIASES:
         logger.debug(f"Model aliases configured: {list(MODEL_ALIASES.keys())}")
     if HIDDEN_FROM_LIST:
         logger.debug(f"Models hidden from list: {HIDDEN_FROM_LIST}")
-    
+
     yield
-    
+
     # Graceful shutdown
     logger.info("Shutting down application...")
+
+    # Flush pending usage records
+    try:
+        await app.state.usage_tracker.flush()
+        logger.info("Usage records flushed")
+    except Exception as e:
+        logger.warning(f"Error flushing usage records: {e}")
+
+    # Close HTTP client
     try:
         await app.state.http_client.aclose()
         logger.info("Shared HTTP client closed")
     except Exception as e:
         logger.warning(f"Error closing shared HTTP client: {e}")
+
+    # Close database
+    try:
+        await app.state.db.close()
+        logger.info("Database closed")
+    except Exception as e:
+        logger.warning(f"Error closing database: {e}")
 
 
 # --- FastAPI Application ---
@@ -549,6 +560,13 @@ app.include_router(openai_router)
 
 # Anthropic-compatible API: /v1/messages
 app.include_router(anthropic_router)
+
+# Admin UI: /admin/*
+app.include_router(admin_router)
+
+# OAuth callback (at root level, not under /admin prefix)
+from kiro.routes_admin import oauth_callback_handler
+app.get("/oauth/callback")(oauth_callback_handler)
 
 
 # --- Uvicorn log config ---

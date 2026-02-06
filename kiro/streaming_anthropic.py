@@ -106,7 +106,10 @@ async def stream_kiro_to_anthropic(
     first_token_timeout: float = FIRST_TOKEN_TIMEOUT,
     request_messages: Optional[list] = None,
     conversation_id: Optional[str] = None,
-    estimated_input_tokens: Optional[int] = None
+    estimated_input_tokens: Optional[int] = None,
+    usage_tracker: Optional["UsageTracker"] = None,
+    api_key_id: Optional[int] = None,
+    kiro_account_id: Optional[int] = None
 ) -> AsyncGenerator[str, None]:
     """
     Generator for converting Kiro stream to Anthropic SSE format.
@@ -555,7 +558,25 @@ async def stream_kiro_to_anthropic(
             f"input_tokens={input_tokens}, output_tokens={output_tokens}, "
             f"tool_blocks={len(tool_blocks)}, stop_reason={stop_reason}"
         )
-        
+
+        # Record usage to database
+        if usage_tracker and api_key_id and kiro_account_id:
+            try:
+                await usage_tracker.record_request(
+                    api_key_id=api_key_id,
+                    kiro_account_id=kiro_account_id,
+                    model=model,
+                    endpoint="/v1/messages",
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    status_code=200,
+                    duration_ms=0
+                )
+                await usage_tracker.flush()  # Flush immediately for real-time updates
+                logger.debug(f"Recorded usage: {input_tokens + output_tokens} tokens for API key {api_key_id}")
+            except Exception as e:
+                logger.error(f"Failed to record usage: {e}")
+
     except FirstTokenTimeoutError:
         raise
     except GeneratorExit:
@@ -588,7 +609,10 @@ async def collect_anthropic_response(
     model_cache: "ModelInfoCache",
     auth_manager: "KiroAuthManager",
     request_messages: Optional[list] = None,
-    estimated_input_tokens: Optional[int] = None
+    estimated_input_tokens: Optional[int] = None,
+    usage_tracker: Optional["UsageTracker"] = None,
+    api_key_id: Optional[int] = None,
+    kiro_account_id: Optional[int] = None
 ) -> dict:
     """
     Collect full response from Kiro stream in Anthropic format.
@@ -602,7 +626,10 @@ async def collect_anthropic_response(
         auth_manager: Authentication manager
         request_messages: Original request messages (for token counting)
         estimated_input_tokens: Pre-request token estimate from payload (optional)
-    
+        usage_tracker: Usage tracker instance
+        api_key_id: API key ID for usage tracking
+        kiro_account_id: Kiro account ID for usage tracking
+
     Returns:
         Dictionary with full response in Anthropic Messages format
     """
@@ -682,7 +709,25 @@ async def collect_anthropic_response(
         f"input_tokens={input_tokens}, output_tokens={output_tokens}, "
         f"tool_calls={len(result.tool_calls)}, stop_reason={stop_reason}"
     )
-    
+
+    # Record usage to database
+    if usage_tracker and api_key_id and kiro_account_id:
+        try:
+            await usage_tracker.record_request(
+                api_key_id=api_key_id,
+                kiro_account_id=kiro_account_id,
+                model=model,
+                endpoint="/v1/messages",
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                status_code=200,
+                duration_ms=0
+            )
+            await usage_tracker.flush()  # Flush immediately for real-time updates
+            logger.debug(f"Recorded usage: {input_tokens + output_tokens} tokens for API key {api_key_id}")
+        except Exception as e:
+            logger.error(f"Failed to record usage: {e}")
+
     return {
         "id": message_id,
         "type": "message",

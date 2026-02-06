@@ -78,17 +78,20 @@ async def stream_kiro_to_openai_internal(
     first_token_timeout: float = FIRST_TOKEN_TIMEOUT,
     request_messages: Optional[list] = None,
     request_tools: Optional[list] = None,
-    conversation_id: Optional[str] = None
+    conversation_id: Optional[str] = None,
+    usage_tracker: Optional["UsageTracker"] = None,
+    api_key_id: Optional[int] = None,
+    kiro_account_id: Optional[int] = None
 ) -> AsyncGenerator[str, None]:
     """
     Internal generator for converting Kiro stream to OpenAI format.
-    
+
     Parses AWS SSE stream and converts events to OpenAI chat.completion.chunk.
     Supports tool calls and usage calculation.
-    
+
     IMPORTANT: This function raises FirstTokenTimeoutError if first token
     is not received within first_token_timeout seconds.
-    
+
     Args:
         client: HTTP client (for connection management)
         response: HTTP response with data stream
@@ -99,19 +102,21 @@ async def stream_kiro_to_openai_internal(
         request_messages: Original request messages (for fallback token counting)
         request_tools: Original request tools (for fallback token counting)
         conversation_id: Stable conversation ID for truncation recovery (optional)
-        conversation_id: Stable conversation ID for truncation recovery (optional)
-    
+        usage_tracker: Usage tracker instance
+        api_key_id: API key ID for usage tracking
+        kiro_account_id: Kiro account ID for usage tracking
+
     Yields:
         Strings in SSE format: "data: {...}\\n\\n" or "data: [DONE]\\n\\n"
-    
+
     Raises:
         FirstTokenTimeoutError: If first token not received within timeout
-    
+
     Example:
         >>> async for chunk in stream_kiro_to_openai_internal(client, response, "claude-sonnet-4", cache, auth):
         ...     print(chunk)
         data: {"id":"chatcmpl-...","object":"chat.completion.chunk",...}
-        
+
         data: [DONE]
     """
     completion_id = generate_completion_id()
@@ -339,8 +344,27 @@ async def stream_kiro_to_openai_internal(
             f"completion_tokens={completion_tokens} (tiktoken), "
             f"total_tokens={total_tokens} ({total_source})"
         )
-        
+
         yield f"data: {json.dumps(final_chunk, ensure_ascii=False)}\n\n"
+
+        # Record usage to database
+        if usage_tracker and api_key_id and kiro_account_id:
+            try:
+                await usage_tracker.record_request(
+                    api_key_id=api_key_id,
+                    kiro_account_id=kiro_account_id,
+                    model=model,
+                    endpoint="/v1/chat/completions",
+                    input_tokens=prompt_tokens,
+                    output_tokens=completion_tokens,
+                    status_code=200,
+                    duration_ms=0
+                )
+                await usage_tracker.flush()  # Flush immediately for real-time updates
+                logger.debug(f"Recorded usage: {total_tokens} tokens for API key {api_key_id}")
+            except Exception as e:
+                logger.error(f"Failed to record usage: {e}")
+
         yield "data: [DONE]\n\n"
         
     except FirstTokenTimeoutError:
@@ -381,14 +405,17 @@ async def stream_kiro_to_openai(
     model_cache: "ModelInfoCache",
     auth_manager: "KiroAuthManager",
     request_messages: Optional[list] = None,
-    request_tools: Optional[list] = None
+    request_tools: Optional[list] = None,
+    usage_tracker: Optional["UsageTracker"] = None,
+    api_key_id: Optional[int] = None,
+    kiro_account_id: Optional[int] = None
 ) -> AsyncGenerator[str, None]:
     """
     Generator for converting Kiro stream to OpenAI format.
-    
+
     This is a wrapper over stream_kiro_to_openai_internal that does NOT retry.
     Retry logic is implemented in stream_with_first_token_retry.
-    
+
     Args:
         client: HTTP client (for connection management)
         response: HTTP response with data stream
@@ -397,14 +424,20 @@ async def stream_kiro_to_openai(
         auth_manager: Authentication manager
         request_messages: Original request messages (for fallback token counting)
         request_tools: Original request tools (for fallback token counting)
-    
+        usage_tracker: Usage tracker instance
+        api_key_id: API key ID for usage tracking
+        kiro_account_id: Kiro account ID for usage tracking
+
     Yields:
         Strings in SSE format: "data: {...}\\n\\n" or "data: [DONE]\\n\\n"
     """
     async for chunk in stream_kiro_to_openai_internal(
         client, response, model, model_cache, auth_manager,
         request_messages=request_messages,
-        request_tools=request_tools
+        request_tools=request_tools,
+        usage_tracker=usage_tracker,
+        api_key_id=api_key_id,
+        kiro_account_id=kiro_account_id
     ):
         yield chunk
 

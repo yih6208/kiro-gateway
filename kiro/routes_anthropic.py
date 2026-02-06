@@ -67,86 +67,132 @@ auth_header = APIKeyHeader(name="Authorization", auto_error=False)
 
 
 async def verify_anthropic_api_key(
+    request: Request,
     x_api_key: Optional[str] = Security(anthropic_api_key_header),
     authorization: Optional[str] = Security(auth_header)
-) -> bool:
+) -> dict:
     """
-    Verify API key for Anthropic API.
-    
+    Verify API key for Anthropic API (multi-tenant mode).
+
     Supports two authentication methods:
     1. x-api-key header (Anthropic native)
     2. Authorization: Bearer header (for compatibility)
-    
+
     Args:
+        request: FastAPI request for accessing app.state
         x_api_key: Value from x-api-key header
         authorization: Value from Authorization header
-    
+
     Returns:
-        True if key is valid
-    
+        API key metadata dict
+
     Raises:
         HTTPException: 401 if key is invalid or missing
     """
-    # Check x-api-key first (Anthropic native)
-    if x_api_key and x_api_key == PROXY_API_KEY:
-        return True
-    
-    # Fall back to Authorization: Bearer
-    if authorization and authorization == f"Bearer {PROXY_API_KEY}":
-        return True
-    
-    logger.warning("Access attempt with invalid API key (Anthropic endpoint)")
-    raise HTTPException(
-        status_code=401,
-        detail={
-            "type": "error",
-            "error": {
-                "type": "authentication_error",
-                "message": "Invalid or missing API key. Use x-api-key header or Authorization: Bearer."
+    # Extract key from either header
+    key = None
+    if x_api_key and x_api_key.startswith("sk-"):
+        key = x_api_key
+    elif authorization and authorization.startswith("Bearer sk-"):
+        key = authorization[7:]  # Remove "Bearer " prefix
+
+    if not key:
+        logger.warning("Access attempt with invalid API key format (Anthropic endpoint)")
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "type": "error",
+                "error": {
+                    "type": "authentication_error",
+                    "message": "Invalid or missing API key. Use x-api-key header or Authorization: Bearer with sk-xxxxx key."
+                }
             }
-        }
-    )
+        )
+
+    # Validate key with APIKeyManager
+    api_key_manager = request.app.state.api_key_manager
+    metadata = await api_key_manager.validate_key(key)
+
+    if not metadata:
+        logger.warning("Access attempt with invalid API key (Anthropic endpoint)")
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "type": "error",
+                "error": {
+                    "type": "authentication_error",
+                    "message": "Invalid or missing API key."
+                }
+            }
+        )
+
+    # Check usage limits
+    is_within_limits, limit_error = await api_key_manager.check_usage_limits(metadata["api_key_id"])
+    if not is_within_limits:
+        logger.warning(f"API key {metadata['key_id']} exceeded usage limits: {limit_error}")
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "type": "error",
+                "error": {
+                    "type": "rate_limit_error",
+                    "message": f"Usage limit exceeded: {limit_error}"
+                }
+            }
+        )
+
+    return metadata
 
 
 # --- Router ---
 router = APIRouter(tags=["Anthropic API"])
 
 
-@router.post("/v1/messages", dependencies=[Depends(verify_anthropic_api_key)])
+@router.post("/v1/messages")
 async def messages(
     request: Request,
     request_data: AnthropicMessagesRequest,
+    key_metadata: dict = Depends(verify_anthropic_api_key),
     anthropic_version: Optional[str] = Header(None, alias="anthropic-version")
 ):
     """
     Anthropic Messages API endpoint.
-    
+
     Compatible with Anthropic's /v1/messages endpoint.
     Accepts requests in Anthropic format and translates them to Kiro API.
-    
+
     Required headers:
     - x-api-key: Your API key (or Authorization: Bearer)
     - anthropic-version: API version (optional, for compatibility)
     - Content-Type: application/json
-    
+
     Args:
         request: FastAPI Request for accessing app.state
         request_data: Request in Anthropic MessagesRequest format
+        key_metadata: API key metadata from verify_anthropic_api_key
         anthropic_version: Anthropic API version header (optional)
-    
+
     Returns:
         StreamingResponse for streaming mode (SSE)
         JSONResponse for non-streaming mode
-    
+
     Raises:
         HTTPException: On validation or API errors
     """
-    logger.info(f"Request to /v1/messages (model={request_data.model}, stream={request_data.stream})")
-    
+    logger.info(f"Request to /v1/messages (model={request_data.model}, stream={request_data.stream}, api_key={key_metadata['key_id']})")
+
     if anthropic_version:
         logger.debug(f"Anthropic-Version header: {anthropic_version}")
-    
-    auth_manager: KiroAuthManager = request.app.state.auth_manager
+
+    # Get account from pool
+    account_pool = request.app.state.account_pool
+    try:
+        account_id, auth_manager = await account_pool.get_account()
+        logger.debug(f"Using Kiro account {account_id} for request")
+    except HTTPException as e:
+        logger.error(f"Failed to get Kiro account: {e.detail}")
+        raise
+
     model_cache: ModelInfoCache = request.app.state.model_cache
     
     # Note: prepare_new_request() and log_request_body() are now called by DebugLoggerMiddleware
@@ -408,7 +454,10 @@ async def messages(
                         model_cache,
                         auth_manager,
                         request_messages=messages_for_tokenizer,
-                        estimated_input_tokens=estimated_input_tokens
+                        estimated_input_tokens=estimated_input_tokens,
+                        usage_tracker=request.app.state.usage_tracker,
+                        api_key_id=key_metadata["api_key_id"],
+                        kiro_account_id=account_id
                     ):
                         yield chunk
                 except GeneratorExit:
@@ -457,11 +506,14 @@ async def messages(
                 model_cache,
                 auth_manager,
                 request_messages=messages_for_tokenizer,
-                estimated_input_tokens=estimated_input_tokens
+                estimated_input_tokens=estimated_input_tokens,
+                usage_tracker=request.app.state.usage_tracker,
+                api_key_id=key_metadata["api_key_id"],
+                kiro_account_id=account_id
             )
-            
+
             await http_client.close()
-            
+
             logger.info(f"HTTP 200 - POST /v1/messages (non-streaming) - completed")
             
             if debug_logger:

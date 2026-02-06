@@ -6,6 +6,16 @@ loguru
 python-dotenv
 tiktoken
 
+# Multi-tenant dependencies
+aiosqlite>=0.19.0
+sqlalchemy[asyncio]>=2.0.0
+cryptography>=41.0.0
+bcrypt>=4.1.0
+python-jose[cryptography]>=3.3.0
+jinja2>=3.1.0
+python-multipart>=0.0.6
+click>=8.1.0
+
 # Testing dependencies
 pytest
 pytest-asyncio

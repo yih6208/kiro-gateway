@@ -504,6 +504,43 @@ FAKE_REASONING_INITIAL_BUFFER_SIZE: int = int(os.getenv("FAKE_REASONING_INITIAL_
 
 
 # ==================================================================================================
+# Multi-Tenant Configuration
+# ==================================================================================================
+
+# Database URL for multi-tenant storage
+# Format: sqlite+aiosqlite:///path/to/database.db
+# Default: sqlite+aiosqlite:///./kiro_gateway.db (current directory)
+DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./kiro_gateway.db")
+
+# Encryption key for sensitive data (Fernet key)
+# REQUIRED for multi-tenant mode
+# Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+ENCRYPTION_KEY: str = os.getenv("ENCRYPTION_KEY", "")
+
+# OAuth Configuration for IAM SSO Integration
+# Your organization's IAM Identity Center start URL
+OAUTH_START_URL: str = os.getenv("OAUTH_START_URL", "https://amzn.awsapps.com/start")
+OAUTH_REGION: str = os.getenv("OAUTH_REGION", "us-east-1")
+
+# Admin Session Configuration
+# Secret key for JWT session tokens (REQUIRED)
+# Generate with: python -c "import secrets; print(secrets.token_urlsafe(32))"
+ADMIN_SESSION_SECRET: str = os.getenv("ADMIN_SESSION_SECRET", "")
+
+# Admin session expiry time in hours
+# Default: 24 hours
+ADMIN_SESSION_EXPIRY_HOURS: int = int(os.getenv("ADMIN_SESSION_EXPIRY_HOURS", "24"))
+
+# Account Pool Configuration
+# Number of consecutive errors before deactivating an account
+# Default: 3
+ACCOUNT_POOL_ERROR_THRESHOLD: int = int(os.getenv("ACCOUNT_POOL_ERROR_THRESHOLD", "3"))
+
+# Cooldown period in minutes before retrying a deactivated account
+# Default: 10 minutes
+ACCOUNT_POOL_COOLDOWN_MINUTES: int = int(os.getenv("ACCOUNT_POOL_COOLDOWN_MINUTES", "10"))
+
+# ==================================================================================================
 # Application Version
 # ==================================================================================================
 

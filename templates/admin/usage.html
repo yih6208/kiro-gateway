@@ -1,0 +1,143 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Usage Analytics - Kiro Gateway Admin{% endblock %}
+
+{% block content %}
+<div class="px-4 py-6 sm:px-0">
+    <h1 class="text-3xl font-bold text-gray-900 mb-6">Usage Analytics</h1>
+
+    <!-- Overall Statistics -->
+    <div class="bg-white shadow overflow-hidden sm:rounded-lg mb-6">
+        <div class="px-4 py-5 sm:px-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900">Overall Statistics</h3>
+        </div>
+        <div class="border-t border-gray-200 px-4 py-5 sm:p-0">
+            <dl class="sm:divide-y sm:divide-gray-200">
+                <div class="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt class="text-sm font-medium text-gray-500">Total Requests</dt>
+                    <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{{ "{:,}".format(overall_stats.total_requests) }}</dd>
+                </div>
+                <div class="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt class="text-sm font-medium text-gray-500">Total Input Tokens</dt>
+                    <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{{ "{:,}".format(overall_stats.total_input_tokens) }}</dd>
+                </div>
+                <div class="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt class="text-sm font-medium text-gray-500">Total Output Tokens</dt>
+                    <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{{ "{:,}".format(overall_stats.total_output_tokens) }}</dd>
+                </div>
+                <div class="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt class="text-sm font-medium text-gray-500">Total Tokens</dt>
+                    <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{{ "{:,}".format(overall_stats.total_tokens) }}</dd>
+                </div>
+                <div class="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt class="text-sm font-medium text-gray-500">Average Duration</dt>
+                    <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{{ "%.2f"|format(overall_stats.avg_duration_ms) }} ms</dd>
+                </div>
+            </dl>
+        </div>
+    </div>
+
+    <!-- Usage by Model -->
+    <div class="bg-white shadow overflow-hidden sm:rounded-lg mb-6">
+        <div class="px-4 py-5 sm:px-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900">Usage by Model</h3>
+        </div>
+        <div class="border-t border-gray-200">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Model</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Requests</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Input Tokens</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Output Tokens</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Tokens</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for model in by_model %}
+                    <tr>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ model.model or 'Unknown' }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ "{:,}".format(model.request_count) }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ "{:,}".format(model.input_tokens) }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ "{:,}".format(model.output_tokens) }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ "{:,}".format(model.total_tokens) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Usage by Endpoint -->
+    <div class="bg-white shadow overflow-hidden sm:rounded-lg mb-6">
+        <div class="px-4 py-5 sm:px-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900">Usage by Endpoint</h3>
+        </div>
+        <div class="border-t border-gray-200">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Endpoint</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Requests</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Tokens</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Duration</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for endpoint in by_endpoint %}
+                    <tr>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ endpoint.endpoint }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ "{:,}".format(endpoint.request_count) }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ "{:,}".format(endpoint.total_tokens) }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ "%.2f"|format(endpoint.avg_duration_ms) }} ms</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Recent Requests -->
+    <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+        <div class="px-4 py-5 sm:px-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900">Recent Requests (Last 50)</h3>
+        </div>
+        <div class="border-t border-gray-200">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Model</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Endpoint</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tokens</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for request in recent_requests %}
+                    <tr>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ request.timestamp }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ request.model or 'Unknown' }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ request.endpoint }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {{ request.input_tokens }} / {{ request.output_tokens }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            {% if request.status_code >= 200 and request.status_code < 300 %}
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">{{ request.status_code }}</span>
+                            {% elif request.status_code >= 400 and request.status_code < 500 %}
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">{{ request.status_code }}</span>
+                            {% else %}
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">{{ request.status_code }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ request.request_duration_ms }} ms</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

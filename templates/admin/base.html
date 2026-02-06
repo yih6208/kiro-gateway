@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Kiro Gateway Admin{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <style>
+        .nav-link {
+            @apply px-3 py-2 rounded-md text-sm font-medium;
+        }
+        .nav-link:hover {
+            @apply bg-gray-700;
+        }
+        .nav-link.active {
+            @apply bg-gray-900 text-white;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <!-- Navigation -->
+    <nav class="bg-gray-800 text-white">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <h1 class="text-xl font-bold">Kiro Gateway Admin</h1>
+                    </div>
+                    <div class="ml-10 flex items-baseline space-x-4">
+                        <a href="/admin/dashboard" class="nav-link {% if request.url.path == '/admin/dashboard' %}active{% endif %}">Dashboard</a>
+                        <a href="/admin/api-keys" class="nav-link {% if request.url.path == '/admin/api-keys' %}active{% endif %}">API Keys</a>
+                        <a href="/admin/kiro-accounts" class="nav-link {% if request.url.path == '/admin/kiro-accounts' %}active{% endif %}">Kiro Accounts</a>
+                        <a href="/admin/usage" class="nav-link {% if request.url.path == '/admin/usage' %}active{% endif %}">Usage</a>
+                    </div>
+                </div>
+                <div class="flex items-center">
+                    <span class="text-sm mr-4">{{ admin.username }}</span>
+                    <form action="/admin/logout" method="POST" class="inline">
+                        <button type="submit" class="px-3 py-2 rounded-md text-sm font-medium bg-red-600 hover:bg-red-700">
+                            Logout
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        {% block content %}{% endblock %}
+    </main>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

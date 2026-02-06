@@ -31,3 +31,22 @@ requests/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Database
+*.db
+
+# Logs
+*.log
+
+# Archives
+*.tar
+*.tar.gz
+*.zip
+
+# Generated docs
+IMPLEMENTATION_*.md
+ROUTES_INTEGRATION_GUIDE.md
+USAGE_LIMITS_FEATURE.md
+
+# Test scripts (not part of test suite)
+test_large_file.py

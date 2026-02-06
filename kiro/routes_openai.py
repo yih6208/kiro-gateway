@@ -50,6 +50,7 @@ from kiro.converters_openai import build_kiro_payload
 from kiro.streaming_openai import stream_kiro_to_openai, collect_stream_response, stream_with_first_token_retry
 from kiro.http_client import KiroHttpClient
 from kiro.utils import generate_conversation_id
+from kiro.multi_tenant_wrapper import MultiTenantRequestContext
 
 # Import debug_logger
 try:
@@ -62,25 +63,54 @@ except ImportError:
 api_key_header = APIKeyHeader(name="Authorization", auto_error=False)
 
 
-async def verify_api_key(auth_header: str = Security(api_key_header)) -> bool:
+async def verify_api_key(
+    auth_header: str = Security(api_key_header),
+    request: Request = None
+) -> dict:
     """
-    Verify API key in Authorization header.
-    
-    Expects format: "Bearer {PROXY_API_KEY}"
-    
+    Verify API key in Authorization header (multi-tenant mode).
+
+    Expects format: "Bearer sk-xxxxx..."
+
     Args:
         auth_header: Authorization header value
-    
+        request: FastAPI request for accessing app.state
+
     Returns:
-        True if key is valid
-    
+        API key metadata dict
+
     Raises:
         HTTPException: 401 if key is invalid or missing
     """
-    if not auth_header or auth_header != f"Bearer {PROXY_API_KEY}":
+    if not auth_header or not auth_header.startswith("Bearer "):
+        logger.warning("Access attempt with invalid authorization header format.")
+        raise HTTPException(status_code=401, detail="Invalid or missing API Key")
+
+    key = auth_header[7:]  # Remove "Bearer " prefix
+
+    api_key_manager = request.app.state.api_key_manager
+    metadata = await api_key_manager.validate_key(key)
+
+    if not metadata:
         logger.warning("Access attempt with invalid API key.")
         raise HTTPException(status_code=401, detail="Invalid or missing API Key")
-    return True
+
+    # Check usage limits
+    is_within_limits, limit_error = await api_key_manager.check_usage_limits(metadata["api_key_id"])
+    if not is_within_limits:
+        logger.warning(f"API key {metadata['key_id']} exceeded usage limits: {limit_error}")
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": {
+                    "message": f"Usage limit exceeded: {limit_error}",
+                    "type": "rate_limit_error",
+                    "code": "rate_limit_exceeded"
+                }
+            }
+        )
+
+    return metadata
 
 
 # --- Router ---
@@ -150,29 +180,46 @@ async def get_models(request: Request):
     return ModelList(data=openai_models)
 
 
-@router.post("/v1/chat/completions", dependencies=[Depends(verify_api_key)])
-async def chat_completions(request: Request, request_data: ChatCompletionRequest):
+@router.post("/v1/chat/completions")
+async def chat_completions(
+    request: Request,
+    request_data: ChatCompletionRequest,
+    key_metadata: dict = Depends(verify_api_key)
+):
     """
     Chat completions endpoint - compatible with OpenAI API.
-    
+
     Accepts requests in OpenAI format and translates them to Kiro API.
     Supports streaming and non-streaming modes.
-    
+
     Args:
         request: FastAPI Request for accessing app.state
         request_data: Request in OpenAI ChatCompletionRequest format
-    
+        key_metadata: API key metadata from verify_api_key
+
     Returns:
         StreamingResponse for streaming mode
         JSONResponse for non-streaming mode
-    
+
     Raises:
         HTTPException: On validation or API errors
     """
-    logger.info(f"Request to /v1/chat/completions (model={request_data.model}, stream={request_data.stream})")
-    
-    auth_manager: KiroAuthManager = request.app.state.auth_manager
+    logger.info(f"Request to /v1/chat/completions (model={request_data.model}, stream={request_data.stream}, api_key={key_metadata['key_id']})")
+
+    # Get account from pool
+    account_pool = request.app.state.account_pool
+    try:
+        account_id, auth_manager = await account_pool.get_account()
+        logger.debug(f"Using Kiro account {account_id} for request")
+    except HTTPException as e:
+        logger.error(f"Failed to get Kiro account: {e.detail}")
+        raise
+
     model_cache: ModelInfoCache = request.app.state.model_cache
+
+    # Track request start time for duration calculation
+    import time
+    request_start_time = time.time()
     
     # Note: prepare_new_request() and log_request_body() are now called by DebugLoggerMiddleware
     # This ensures debug logging works even for requests that fail Pydantic validation (422 errors)
@@ -342,7 +389,10 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
                         model_cache,
                         auth_manager,
                         request_messages=messages_for_tokenizer,
-                        request_tools=tools_for_tokenizer
+                        request_tools=tools_for_tokenizer,
+                        usage_tracker=request.app.state.usage_tracker,
+                        api_key_id=key_metadata["api_key_id"],
+                        kiro_account_id=account_id
                     ):
                         yield chunk
                 except GeneratorExit:
