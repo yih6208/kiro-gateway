@@ -301,6 +301,8 @@ External model names are converted to internal Kiro IDs:
 |---------------|------------------|
 | `claude-opus-4-5` | `claude-opus-4.5` |
 | `claude-opus-4-5-20251101` | `claude-opus-4.5` |
+| `claude-opus-4-6` | `claude-opus-4.6` |
+| `claude-opus-4-6-20260206` | `claude-opus-4.6` |
 | `claude-haiku-4-5` | `claude-haiku-4.5` |
 | `claude-haiku-4.5` | `claude-haiku-4.5` (direct passthrough) |
 | `claude-sonnet-4-5` | `CLAUDE_SONNET_4_5_20250929_V1_0` |
@@ -609,6 +611,7 @@ Anthropic SSE Format ───────────────────�
 
 | Model | Description | Credits |
 |-------|-------------|---------|
+| `claude-opus-4-6` | Latest top-tier model | ~2.2 |
 | `claude-opus-4-5` | Top-tier model | ~2.2 |
 | `claude-opus-4-5-20251101` | Top-tier model (version) | ~2.2 |
 | `claude-sonnet-4-5` | Enhanced model | ~1.3 |

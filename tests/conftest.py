@@ -143,6 +143,14 @@ def mock_kiro_models_response():
                 }
             },
             {
+                "modelId": "claude-opus-4.6",
+                "displayName": "Claude Opus 4.6",
+                "tokenLimits": {
+                    "maxInputTokens": 200000,
+                    "maxOutputTokens": 16384
+                }
+            },
+            {
                 "modelId": "claude-haiku-4.5",
                 "displayName": "Claude Haiku 4.5",
                 "tokenLimits": {
@@ -496,6 +504,14 @@ def sample_models_data():
             "tokenLimits": {
                 "maxInputTokens": 200000,
                 "maxOutputTokens": 8192
+            }
+        },
+        {
+            "modelId": "claude-opus-4.6",
+            "displayName": "Claude Opus 4.6",
+            "tokenLimits": {
+                "maxInputTokens": 200000,
+                "maxOutputTokens": 16384
             }
         },
         {

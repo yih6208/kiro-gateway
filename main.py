@@ -440,10 +440,29 @@ async def lifespan(app: FastAPI):
                 models_list = data.get("models", [])
                 await app.state.model_cache.update(models_list)
                 logger.info(f"Successfully loaded {len(models_list)} models from Kiro API:")
-                for model in models_list:
-                    model_id = model.get("modelId", "unknown")
-                    display_name = model.get("displayName", model_id)
-                    logger.info(f"  - {display_name} ({model_id})")
+
+                # Log each model with detailed error handling
+                for idx, model in enumerate(models_list):
+                    try:
+                        if model is None:
+                            logger.warning(f"  - [Index {idx}] Skipping None model entry")
+                            continue
+
+                        model_id = model.get("modelId", "unknown")
+                        display_name = model.get("displayName", model_id)
+                        token_limits = model.get("tokenLimits", {})
+
+                        if token_limits is None:
+                            token_limits = {}
+
+                        max_input = token_limits.get("maxInputTokens", "N/A")
+                        max_output = token_limits.get("maxOutputTokens", "N/A")
+
+                        logger.info(f"  - {display_name} ({model_id})")
+                        logger.debug(f"    Token limits: maxInput={max_input}, maxOutput={max_output}")
+                    except Exception as e:
+                        logger.error(f"  - [Index {idx}] Error processing model: {e}")
+                        logger.debug(f"    Model data: {model}")
             else:
                 raise Exception(f"HTTP {response.status_code}")
     except Exception as e:

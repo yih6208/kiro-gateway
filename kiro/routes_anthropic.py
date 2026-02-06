@@ -262,6 +262,12 @@ async def messages(
             conversation_id,
             profile_arn_for_payload
         )
+
+        # Extract the converted model ID from the payload for accurate token calculation
+        # The model ID in the payload is the one actually sent to Kiro API (after normalization and hidden model mapping)
+        converted_model_id = kiro_payload.get("conversationState", {}).get("currentMessage", {}).get("userInputMessage", {}).get("modelId", request_data.model)
+        logger.debug(f"Converted model ID for token calculation: {converted_model_id}")
+
     except ValueError as e:
         logger.error(f"Conversion error: {e}")
         return JSONResponse(
@@ -363,9 +369,10 @@ async def messages(
                 streaming_error = None
                 client_disconnected = False
                 try:
+                    logger.debug(f"[Streaming] Using model ID for token calculation: {converted_model_id} (original: {request_data.model})")
                     async for chunk in stream_kiro_to_anthropic(
                         response,
-                        request_data.model,
+                        converted_model_id,  # Use converted model ID instead of original
                         model_cache,
                         auth_manager,
                         request_messages=messages_for_tokenizer
@@ -410,9 +417,10 @@ async def messages(
         
         else:
             # Non-streaming mode - collect entire response
+            logger.debug(f"[Non-streaming] Using model ID for token calculation: {converted_model_id} (original: {request_data.model})")
             anthropic_response = await collect_anthropic_response(
                 response,
-                request_data.model,
+                converted_model_id,  # Use converted model ID instead of original
                 model_cache,
                 auth_manager,
                 request_messages=messages_for_tokenizer

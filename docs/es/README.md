@@ -27,6 +27,8 @@ Hecho con ❤️ por [@Jwadow](https://github.com/jwadow)
 
 > 🔒 **Claude Opus 4.5** fue eliminado del plan gratuito el 17 de enero de 2026. Puede estar disponible en planes de pago — verifica la lista de modelos en tu IDE/CLI.
 
+> 🆕 **Claude Opus 4.6** es el modelo de nivel superior más reciente con capacidades mejoradas y 16K tokens de salida máxima.
+
 🚀 **Claude Sonnet 4.5** — Rendimiento equilibrado. Excelente para programación, escritura y tareas de propósito general.
 
 ⚡ **Claude Haiku 4.5** — Velocidad relámpago. Perfecto para respuestas rápidas, tareas simples y chat.
