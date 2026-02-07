@@ -77,7 +77,7 @@ class APIKeyManager:
             await session.refresh(api_key)
 
             metadata = {
-                "api_key_id": api_key.id,
+                "api_key_id": api_key.key_id,
                 "key_id": api_key.key_id,
                 "name": api_key.name,
                 "user_id": api_key.user_id,
@@ -133,7 +133,7 @@ class APIKeyManager:
             await session.commit()
 
             return {
-                "api_key_id": api_key.id,
+                "api_key_id": api_key.key_id,
                 "key_id": api_key.key_id,
                 "name": api_key.name,
                 "user_id": api_key.user_id,
@@ -144,7 +144,7 @@ class APIKeyManager:
                 "is_active": api_key.is_active,
             }
 
-    async def deactivate_key(self, api_key_id: int) -> bool:
+    async def deactivate_key(self, api_key_id: str) -> bool:
         """
         Deactivate an API key.
 
@@ -157,14 +157,14 @@ class APIKeyManager:
         async with self.db.SessionLocal() as session:
             stmt = (
                 update(APIKey)
-                .where(APIKey.id == api_key_id)
+                .where(APIKey.key_id == api_key_id)
                 .values(is_active=False)
             )
             result = await session.execute(stmt)
             await session.commit()
             return result.rowcount > 0
 
-    async def delete_key(self, api_key_id: int) -> bool:
+    async def delete_key(self, api_key_id: str) -> bool:
         """
         Permanently delete an API key.
 
@@ -176,12 +176,12 @@ class APIKeyManager:
         """
         async with self.db.SessionLocal() as session:
             from sqlalchemy import delete
-            stmt = delete(APIKey).where(APIKey.id == api_key_id)
+            stmt = delete(APIKey).where(APIKey.key_id == api_key_id)
             result = await session.execute(stmt)
             await session.commit()
             return result.rowcount > 0
 
-    async def get_usage_stats(self, api_key_id: int) -> dict:
+    async def get_usage_stats(self, api_key_id: str) -> dict:
         """
         Get usage statistics for an API key.
 
@@ -209,7 +209,7 @@ class APIKeyManager:
                 "output_tokens": row.output_tokens or 0,
             }
 
-    async def get_usage_by_model(self, api_key_id: int) -> list[dict]:
+    async def get_usage_by_model(self, api_key_id: str) -> list[dict]:
         """
         Get usage statistics for an API key grouped by model.
 
@@ -247,7 +247,7 @@ class APIKeyManager:
                 for row in rows
             ]
 
-    async def check_usage_limits(self, api_key_id: int) -> tuple[bool, Optional[str]]:
+    async def check_usage_limits(self, api_key_id: str) -> tuple[bool, Optional[str]]:
         """
         Check if API key has exceeded usage limits.
 
@@ -259,7 +259,7 @@ class APIKeyManager:
         """
         async with self.db.SessionLocal() as session:
             # Get API key limits
-            stmt = select(APIKey).where(APIKey.id == api_key_id)
+            stmt = select(APIKey).where(APIKey.key_id == api_key_id)
             result = await session.execute(stmt)
             api_key = result.scalar_one_or_none()
 
@@ -285,7 +285,7 @@ class APIKeyManager:
 
     async def update_limits(
         self,
-        api_key_id: int,
+        api_key_id: str,
         usage_limit_tokens: Optional[int] = None,
         usage_limit_requests: Optional[int] = None,
     ) -> bool:
@@ -303,7 +303,7 @@ class APIKeyManager:
         async with self.db.SessionLocal() as session:
             stmt = (
                 update(APIKey)
-                .where(APIKey.id == api_key_id)
+                .where(APIKey.key_id == api_key_id)
                 .values(
                     usage_limit_tokens=usage_limit_tokens,
                     usage_limit_requests=usage_limit_requests,
@@ -334,8 +334,8 @@ class APIKeyManager:
 
             keys_with_stats = []
             for key in keys:
-                stats = await self.get_usage_stats(key.id)
-                model_usage = await self.get_usage_by_model(key.id)
+                stats = await self.get_usage_stats(key.key_id)
+                model_usage = await self.get_usage_by_model(key.key_id)
 
                 # Decrypt full key if available
                 full_key = None
@@ -346,7 +346,7 @@ class APIKeyManager:
                         full_key = None
 
                 keys_with_stats.append({
-                    "api_key_id": key.id,
+                    "api_key_id": key.key_id,
                     "key_id": key.key_id,
                     "full_key": full_key,
                     "name": key.name,

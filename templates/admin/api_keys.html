@@ -52,7 +52,7 @@
                         {% if key.full_key %}
                         <span id="key-hidden-{{ key.api_key_id }}">{{ key.key_id }}...</span>
                         <span id="key-full-{{ key.api_key_id }}" class="hidden">{{ key.full_key }}</span>
-                        <button onclick="toggleKey({{ key.api_key_id }})" id="key-btn-{{ key.api_key_id }}" class="ml-1 text-xs text-indigo-600 hover:text-indigo-800">Show</button>
+                        <button onclick="toggleKey('{{ key.api_key_id }}')" id="key-btn-{{ key.api_key_id }}" class="ml-1 text-xs text-indigo-600 hover:text-indigo-800">Show</button>
                         <button onclick="navigator.clipboard.writeText('{{ key.full_key }}')" class="ml-1 text-xs text-green-600 hover:text-green-800">Copy</button>
                         {% else %}
                         {{ key.key_id }}...
@@ -72,35 +72,12 @@
                             <div class="text-xs text-gray-400">
                                 In: {{ "{:,}".format(key.input_tokens) }} | Out: {{ "{:,}".format(key.output_tokens) }}
                             </div>
+                            <div class="text-xs font-medium text-green-600">Est. Cost: ${{ "%.4f" | format(key.estimated_cost) }}</div>
                             {% if key.model_usage %}
                             <div class="mt-2 border-t pt-2">
-                                <button onclick="toggleModelUsage({{ key.api_key_id }})" class="text-xs text-indigo-600 hover:text-indigo-900">
+                                <button onclick="toggleModelUsage('{{ key.api_key_id }}')" class="text-xs text-indigo-600 hover:text-indigo-900">
                                     Per-model breakdown ({{ key.model_usage | length }})
                                 </button>
-                                <div id="model-usage-{{ key.api_key_id }}" class="hidden mt-1">
-                                    <table class="min-w-full text-xs">
-                                        <thead>
-                                            <tr class="text-gray-400">
-                                                <th class="text-left pr-2">Model</th>
-                                                <th class="text-right pr-2">Reqs</th>
-                                                <th class="text-right pr-2">In</th>
-                                                <th class="text-right pr-2">Out</th>
-                                                <th class="text-right">Total</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {% for mu in key.model_usage %}
-                                            <tr class="border-t border-gray-100">
-                                                <td class="pr-2 py-0.5 font-mono text-gray-600">{{ mu.model }}</td>
-                                                <td class="text-right pr-2">{{ "{:,}".format(mu.requests) }}</td>
-                                                <td class="text-right pr-2">{{ "{:,}".format(mu.input_tokens) }}</td>
-                                                <td class="text-right pr-2">{{ "{:,}".format(mu.output_tokens) }}</td>
-                                                <td class="text-right font-semibold">{{ "{:,}".format(mu.total_tokens) }}</td>
-                                            </tr>
-                                            {% endfor %}
-                                        </tbody>
-                                    </table>
-                                </div>
                             </div>
                             {% endif %}
                         </div>
@@ -146,7 +123,7 @@
                             {% if not key.usage_limit_tokens and not key.usage_limit_requests %}
                             <span class="text-gray-400">No limits</span>
                             {% endif %}
-                            <button onclick="openEditLimitsModal({{ key.api_key_id }}, {{ key.usage_limit_tokens or 'null' }}, {{ key.usage_limit_requests or 'null' }})"
+                            <button onclick="openEditLimitsModal('{{ key.api_key_id }}', {{ key.usage_limit_tokens or 'null' }}, {{ key.usage_limit_requests or 'null' }})"
                                     class="text-xs text-indigo-600 hover:text-indigo-900">Edit Limits</button>
                         </div>
                     </td>
@@ -164,6 +141,39 @@
                         </form>
                     </td>
                 </tr>
+                {% if key.model_usage %}
+                <tr id="model-usage-{{ key.api_key_id }}" class="hidden bg-gray-50">
+                    <td colspan="7" class="px-6 py-4">
+                        <div class="text-xs font-medium text-gray-500 uppercase mb-2">Per-Model Breakdown — {{ key.name or 'Unnamed' }}</div>
+                        <table class="min-w-full text-sm">
+                            <thead>
+                                <tr class="text-xs text-gray-400">
+                                    <th class="text-left pr-4 pb-2">Model</th>
+                                    <th class="text-right pr-4 pb-2">Requests</th>
+                                    <th class="text-right pr-4 pb-2">Input Tokens</th>
+                                    <th class="text-right pr-4 pb-2">Output Tokens</th>
+                                    <th class="text-right pr-4 pb-2">Total Tokens</th>
+                                    <th class="text-right pb-2">Est. Cost</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for mu in key.model_usage %}
+                                <tr class="border-t border-gray-200">
+                                    <td class="pr-4 py-1.5 font-mono text-gray-700">{{ mu.model }}</td>
+                                    <td class="text-right pr-4 py-1.5 text-gray-500">{{ "{:,}".format(mu.requests) }}</td>
+                                    <td class="text-right pr-4 py-1.5 text-gray-500">{{ "{:,}".format(mu.input_tokens) }}</td>
+                                    <td class="text-right pr-4 py-1.5 text-gray-500">{{ "{:,}".format(mu.output_tokens) }}</td>
+                                    <td class="text-right pr-4 py-1.5 font-semibold text-gray-700">{{ "{:,}".format(mu.total_tokens) }}</td>
+                                    <td class="text-right py-1.5 font-medium text-green-600">
+                                        {% if mu.estimated_cost is not none %}${{ "%.4f" | format(mu.estimated_cost) }}{% else %}N/A{% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </td>
+                </tr>
+                {% endif %}
                 {% endfor %}
             </tbody>
         </table>

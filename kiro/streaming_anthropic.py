@@ -108,7 +108,7 @@ async def stream_kiro_to_anthropic(
     conversation_id: Optional[str] = None,
     estimated_input_tokens: Optional[int] = None,
     usage_tracker: Optional["UsageTracker"] = None,
-    api_key_id: Optional[int] = None,
+    api_key_id: Optional[str] = None,
     kiro_account_id: Optional[int] = None
 ) -> AsyncGenerator[str, None]:
     """
@@ -611,7 +611,7 @@ async def collect_anthropic_response(
     request_messages: Optional[list] = None,
     estimated_input_tokens: Optional[int] = None,
     usage_tracker: Optional["UsageTracker"] = None,
-    api_key_id: Optional[int] = None,
+    api_key_id: Optional[str] = None,
     kiro_account_id: Optional[int] = None
 ) -> dict:
     """

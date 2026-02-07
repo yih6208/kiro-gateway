@@ -85,7 +85,7 @@ class UsageRecord(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     api_key_id = Column(
-        Integer, ForeignKey("api_keys.id", ondelete="CASCADE"), nullable=False, index=True
+        String(64), ForeignKey("api_keys.key_id", ondelete="CASCADE"), nullable=False, index=True
     )
     kiro_account_id = Column(
         Integer, ForeignKey("kiro_accounts.id", ondelete="CASCADE"), nullable=False, index=True

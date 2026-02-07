@@ -30,7 +30,7 @@ class UsageTracker:
 
     async def record_request(
         self,
-        api_key_id: int,
+        api_key_id: str,
         kiro_account_id: int,
         model: str,
         endpoint: str,
@@ -109,7 +109,7 @@ class UsageTracker:
 
     async def get_usage_stats(
         self,
-        api_key_id: Optional[int] = None,
+        api_key_id: Optional[str] = None,
         kiro_account_id: Optional[int] = None,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
@@ -169,7 +169,7 @@ class UsageTracker:
 
     async def get_usage_by_model(
         self,
-        api_key_id: Optional[int] = None,
+        api_key_id: Optional[str] = None,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
     ) -> list[dict]:
@@ -229,7 +229,7 @@ class UsageTracker:
 
     async def get_usage_by_endpoint(
         self,
-        api_key_id: Optional[int] = None,
+        api_key_id: Optional[str] = None,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
     ) -> list[dict]:
@@ -277,7 +277,7 @@ class UsageTracker:
 
     async def get_recent_requests(
         self,
-        api_key_id: Optional[int] = None,
+        api_key_id: Optional[str] = None,
         limit: int = 100,
     ) -> list[dict]:
         """

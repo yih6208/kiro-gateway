@@ -80,7 +80,7 @@ async def stream_kiro_to_openai_internal(
     request_tools: Optional[list] = None,
     conversation_id: Optional[str] = None,
     usage_tracker: Optional["UsageTracker"] = None,
-    api_key_id: Optional[int] = None,
+    api_key_id: Optional[str] = None,
     kiro_account_id: Optional[int] = None
 ) -> AsyncGenerator[str, None]:
     """
@@ -407,7 +407,7 @@ async def stream_kiro_to_openai(
     request_messages: Optional[list] = None,
     request_tools: Optional[list] = None,
     usage_tracker: Optional["UsageTracker"] = None,
-    api_key_id: Optional[int] = None,
+    api_key_id: Optional[str] = None,
     kiro_account_id: Optional[int] = None
 ) -> AsyncGenerator[str, None]:
     """

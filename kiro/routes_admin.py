@@ -15,6 +15,7 @@ from sqlalchemy import select
 
 from kiro.config import ADMIN_SESSION_EXPIRY_HOURS, ADMIN_SESSION_SECRET
 from kiro.database import KiroAccount, User
+from kiro.pricing import calculate_cost
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 public_router = APIRouter(tags=["Public"])
@@ -199,6 +200,16 @@ async def api_keys_page(request: Request, admin: dict = Depends(verify_admin_ses
     api_key_manager = request.app.state.api_key_manager
     keys = await api_key_manager.list_keys()
 
+    # Calculate estimated costs per key
+    for key in keys:
+        key_total_cost = 0.0
+        for mu in key.get("model_usage", []):
+            cost = calculate_cost(mu["model"], mu["input_tokens"], mu["output_tokens"])
+            mu["estimated_cost"] = cost["total_cost"]
+            if cost["total_cost"] is not None:
+                key_total_cost += cost["total_cost"]
+        key["estimated_cost"] = key_total_cost
+
     return templates.TemplateResponse(
         "admin/api_keys.html",
         {"request": request, "admin": admin, "keys": keys},
@@ -252,7 +263,7 @@ async def create_api_key(
 @router.post("/api-keys/{key_id}/deactivate")
 async def deactivate_api_key(
     request: Request,
-    key_id: int,
+    key_id: str,
     admin: dict = Depends(verify_admin_session),
 ):
     """Deactivate an API key."""
@@ -269,7 +280,7 @@ async def deactivate_api_key(
 @router.post("/api-keys/{key_id}/delete")
 async def delete_api_key(
     request: Request,
-    key_id: int,
+    key_id: str,
     admin: dict = Depends(verify_admin_session),
 ):
     """Permanently delete an API key."""
@@ -286,7 +297,7 @@ async def delete_api_key(
 @router.post("/api-keys/{key_id}/update-limits")
 async def update_api_key_limits(
     request: Request,
-    key_id: int,
+    key_id: str,
     usage_limit_tokens: Optional[int] = Form(None),
     usage_limit_requests: Optional[int] = Form(None),
     admin: dict = Depends(verify_admin_session),
@@ -481,6 +492,14 @@ async def public_usage(request: Request, api_key: str):
     stats = await api_key_manager.get_usage_stats(api_key_id)
     model_usage = await api_key_manager.get_usage_by_model(api_key_id)
 
+    # Calculate estimated costs per model
+    total_estimated_cost = 0.0
+    for model in model_usage:
+        cost = calculate_cost(model["model"], model["input_tokens"], model["output_tokens"])
+        model["estimated_cost"] = cost["total_cost"]
+        if cost["total_cost"] is not None:
+            total_estimated_cost += cost["total_cost"]
+
     return templates.TemplateResponse(
         "public/usage.html",
         {
@@ -489,6 +508,7 @@ async def public_usage(request: Request, api_key: str):
             "key_id": metadata["key_id"],
             "stats": stats,
             "model_usage": model_usage,
+            "total_estimated_cost": total_estimated_cost,
             "usage_limit_tokens": metadata.get("usage_limit_tokens"),
             "usage_limit_requests": metadata.get("usage_limit_requests"),
         },
@@ -511,6 +531,14 @@ async def usage_page(request: Request, admin: dict = Depends(verify_admin_sessio
     # Get usage by model
     by_model = await usage_tracker.get_usage_by_model()
 
+    # Calculate estimated costs per model
+    total_estimated_cost = 0.0
+    for model in by_model:
+        cost = calculate_cost(model["model"], model["input_tokens"], model["output_tokens"])
+        model["estimated_cost"] = cost["total_cost"]
+        if cost["total_cost"] is not None:
+            total_estimated_cost += cost["total_cost"]
+
     # Get usage by endpoint
     by_endpoint = await usage_tracker.get_usage_by_endpoint()
 
@@ -523,6 +551,7 @@ async def usage_page(request: Request, admin: dict = Depends(verify_admin_sessio
             "request": request,
             "admin": admin,
             "overall_stats": overall_stats,
+            "total_estimated_cost": total_estimated_cost,
             "by_model": by_model,
             "by_endpoint": by_endpoint,
             "recent_requests": recent_requests,

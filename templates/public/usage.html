@@ -47,6 +47,10 @@
                 <p class="text-sm text-gray-500">Output Tokens</p>
                 <p class="text-2xl font-bold text-purple-600">{{ "{:,}".format(stats.output_tokens) }}</p>
             </div>
+            <div class="bg-white rounded-lg shadow p-4 col-span-2 md:col-span-4">
+                <p class="text-sm text-gray-500">Estimated Cost</p>
+                <p class="text-2xl font-bold text-green-600">${{ "%.4f" | format(total_estimated_cost) }}</p>
+            </div>
         </div>
 
         <!-- Per-Model Breakdown -->
@@ -63,6 +67,7 @@
                         <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Input</th>
                         <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Output</th>
                         <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Est. Cost</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200">
@@ -73,6 +78,9 @@
                         <td class="px-6 py-3 text-sm text-gray-500 text-right">{{ "{:,}".format(model.input_tokens) }}</td>
                         <td class="px-6 py-3 text-sm text-gray-500 text-right">{{ "{:,}".format(model.output_tokens) }}</td>
                         <td class="px-6 py-3 text-sm font-medium text-gray-900 text-right">{{ "{:,}".format(model.total_tokens) }}</td>
+                        <td class="px-6 py-3 text-sm font-medium text-green-600 text-right">
+                            {% if model.estimated_cost is not none %}${{ "%.4f" | format(model.estimated_cost) }}{% else %}N/A{% endif %}
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
