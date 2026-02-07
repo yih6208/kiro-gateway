@@ -59,7 +59,7 @@ class OAuthFlowManager:
             response = await client.post(
                 f"{self.oidc_base}/client/register",
                 json={
-                    "clientName": "Kiro Gateway",
+                    "clientName": "Amazon Q Developer for service",
                     "clientType": "public",
                     "scopes": self.scopes,
                     "grantTypes": ["authorization_code", "refresh_token"],
