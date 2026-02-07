@@ -1,5 +1,21 @@
 # Release Notes
 
+## v2.3.6 (2026-02-06)
+
+**Git Commit:** `68d68ee`
+**Docker Image:** `ghcr.io/yih6208/kiro-gateway:2.3.6`
+
+### Changes
+
+#### Bug Fixes
+- **Use payload estimate as fallback for accurate auto-compact** (`68d68ee`)
+  - When `contextUsageEvent` is missing (e.g., claude-opus-4.6), use pre-request payload token estimate for `input_tokens`
+  - Previously fell back to tiktoken estimate which severely underestimated tokens
+  - Ensures Claude Code auto-compact triggers correctly at 95% context usage
+  - Applied to both streaming and non-streaming Anthropic paths
+
+---
+
 ## v2.3.5 (2026-02-06)
 
 **Git Commit:** `561fc49`
@@ -176,6 +192,7 @@
 
 | Version | Date | Git Commit | Notes |
 |---------|------|------------|-------|
+| 2.3.6 | 2026-02-06 | `68d68ee` | Payload estimate fallback for auto-compact accuracy |
 | 2.3.5 | 2026-02-06 | `561fc49` | Fix Opus 4.6 false truncation, improved token estimation |
 | 2.3.4 | 2026-02-06 | `69caf7f` | Remove misleading sonnet 4.5-1m mapping, add pre-request token estimation |
 | 2.3.3 | 2026-02-06 | `c75dfcf` | Claude Opus 4.6 support, Sonnet 4.5 1M token calculation fix |
