@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  kiro-gateway:
+    image: ghcr.io/yih6208/kiro-gateway:multi-account
+    container_name: kiro-gateway
+    network_mode: bridge
+    ports:
+      - "8002:8000"
+    environment:
+      # ===== Multi-Tenant Database =====
+      # SQLite database for API keys, accounts, usage tracking
+      - DATABASE_URL=sqlite+aiosqlite:///app/data/kiro_gateway.db
+      # Encryption key for sensitive data (generate with: python -c "from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())")
+      - ENCRYPTION_KEY=MYwSN7lH58thaPEPhg4cMk6luqs80HS58ZznpJVhyOs=
+      # Admin session secret (generate with: python -c "import secrets; print(secrets.token_hex(32))")
+      - ADMIN_SESSION_SECRET=6ab13107a7dda51ba03288fac8fbfc518fa9f02e10af3fed8d975c17ed794f6a
+
+      # ===== OAuth / SSO Configuration =====
+      # For adding Kiro accounts via admin UI
+      - OAUTH_START_URL=https://amzn.awsapps.com/start
+      - OAUTH_REGION=us-east-1
+
+      # ===== Legacy Auth (fallback if no accounts in pool) =====
+      - KIRO_CLI_DB_FILE=/root/.local/share/kiro-cli/data.sqlite3
+      - KIRO_START_URL=https://amzn.awsapps.com/start
+      - KIRO_LOGIN_REGION=us-east-1
+      - KIRO_LICENSE=pro
+
+      # ===== HTTP Connection Pool =====
+      - HTTP_MAX_CONNECTIONS=300
+      - HTTP_MAX_KEEPALIVE_CONNECTIONS=150
+      - HTTP_KEEPALIVE_EXPIRY=60.0
+      - HTTP_POOL_TIMEOUT=none
+
+      # ===== Global Rate Limiting =====
+      - RATE_LIMIT_MAX_CONCURRENT=10
+      - RATE_LIMIT_MIN_INTERVAL=0.5
+      - RATE_LIMIT_429_BACKOFF=15.0
+
+      # ===== Retry Configuration =====
+      - MAX_RETRIES=3
+      - BASE_RETRY_DELAY=2.0
+
+      # ===== Logging =====
+      - DEBUG_MODE=errors
+      - LOG_LEVEL=DEBUG
+
+      # ===== Streaming =====
+      - STREAMING_READ_TIMEOUT=300
+      - FIRST_TOKEN_TIMEOUT=15
+      - FIRST_TOKEN_MAX_RETRIES=3
+
+    volumes:
+      # Multi-tenant database (API keys, accounts, usage records)
+      - ./data:/app/data
+      # Debug logs
+      - ./debug_logs:/app/debug_logs
+      # Sync time
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
