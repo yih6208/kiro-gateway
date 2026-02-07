@@ -194,12 +194,16 @@ class AccountPool:
                 region=account.region,
                 client_id=client_id,
                 client_secret=client_secret,
+                multi_tenant_db=self.db,
+                multi_tenant_account_id=account.id,
             )
         else:  # KIRO_DESKTOP
             auth_manager = KiroAuthManager(
                 refresh_token=refresh_token,
                 profile_arn=account.profile_arn,
                 region=account.region,
+                multi_tenant_db=self.db,
+                multi_tenant_account_id=account.id,
             )
 
         # Pre-populate access token if available and not expired

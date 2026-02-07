@@ -122,6 +122,8 @@ class KiroAuthManager:
         client_id: Optional[str] = None,
         client_secret: Optional[str] = None,
         sqlite_db: Optional[str] = None,
+        multi_tenant_db=None,
+        multi_tenant_account_id: Optional[int] = None,
     ):
         """
         Initializes the authentication manager.
@@ -141,6 +143,8 @@ class KiroAuthManager:
         self._region = region
         self._creds_file = creds_file
         self._sqlite_db = sqlite_db
+        self._multi_tenant_db = multi_tenant_db
+        self._multi_tenant_account_id = multi_tenant_account_id
         
         # AWS SSO OIDC specific fields
         self._client_id: Optional[str] = client_id
@@ -520,7 +524,42 @@ class KiroAuthManager:
             logger.error(f"SQLite error saving credentials: {e}")
         except Exception as e:
             logger.error(f"Error saving credentials to SQLite: {e}")
-    
+
+    async def _save_credentials_to_multi_tenant_db(self) -> None:
+        """
+        Saves refreshed credentials back to the kiro_accounts table.
+
+        Called after token refresh when running in multi-tenant mode.
+        Encrypts access_token and refresh_token before storing.
+        """
+        if not self._multi_tenant_db or self._multi_tenant_account_id is None:
+            return
+
+        try:
+            from kiro.database import KiroAccount
+            from sqlalchemy import update
+
+            async with self._multi_tenant_db.SessionLocal() as session:
+                values = {
+                    "expires_at": self._expires_at,
+                }
+                if self._access_token:
+                    values["access_token_encrypted"] = self._multi_tenant_db.encrypt(self._access_token)
+                if self._refresh_token:
+                    values["refresh_token_encrypted"] = self._multi_tenant_db.encrypt(self._refresh_token)
+
+                stmt = (
+                    update(KiroAccount)
+                    .where(KiroAccount.id == self._multi_tenant_account_id)
+                    .values(**values)
+                )
+                await session.execute(stmt)
+                await session.commit()
+
+            logger.info(f"Saved refreshed credentials to kiro_accounts (account_id={self._multi_tenant_account_id})")
+        except Exception as e:
+            logger.error(f"Failed to save credentials to multi-tenant DB: {e}")
+
     def is_token_expiring_soon(self) -> bool:
         """
         Checks if the token is expiring soon.
@@ -629,7 +668,10 @@ class KiroAuthManager:
             self._save_credentials_to_sqlite()
         else:
             self._save_credentials_to_file()
-    
+
+        # Save to multi-tenant database if configured
+        await self._save_credentials_to_multi_tenant_db()
+
     async def _refresh_token_aws_sso_oidc(self) -> None:
         """
         Refreshes token using AWS SSO OIDC endpoint.
@@ -756,7 +798,10 @@ class KiroAuthManager:
             self._save_credentials_to_sqlite()
         else:
             self._save_credentials_to_file()
-    
+
+        # Save to multi-tenant database if configured
+        await self._save_credentials_to_multi_tenant_db()
+
     async def get_access_token(self) -> str:
         """
         Returns a valid access_token, refreshing it if necessary.
