@@ -94,7 +94,7 @@ from kiro.model_resolver import ModelResolver
 from kiro.rate_limiter import init_rate_limiter
 from kiro.routes_openai import router as openai_router
 from kiro.routes_anthropic import router as anthropic_router
-from kiro.routes_admin import router as admin_router
+from kiro.routes_admin import router as admin_router, public_router
 from kiro.exceptions import validation_exception_handler
 from kiro.debug_middleware import DebugLoggerMiddleware
 from kiro.database import Database
@@ -563,6 +563,9 @@ app.include_router(anthropic_router)
 
 # Admin UI: /admin/*
 app.include_router(admin_router)
+
+# Public usage page: /usage/{api_key}
+app.include_router(public_router)
 
 # OAuth callback (at root level, not under /admin prefix)
 from kiro.routes_admin import oauth_callback_handler

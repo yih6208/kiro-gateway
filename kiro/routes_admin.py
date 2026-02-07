@@ -17,6 +17,7 @@ from kiro.config import ADMIN_SESSION_EXPIRY_HOURS, ADMIN_SESSION_SECRET
 from kiro.database import KiroAccount, User
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
+public_router = APIRouter(tags=["Public"])
 templates = Jinja2Templates(directory="templates")
 
 # JWT configuration
@@ -462,6 +463,36 @@ async def delete_account(
 
     logger.info(f"Deleted Kiro account {account_id} by user {admin['username']}")
     return RedirectResponse(url="/admin/kiro-accounts", status_code=303)
+
+
+# ==================== Public Usage Endpoint ====================
+
+
+@public_router.get("/usage/{api_key}", response_class=HTMLResponse)
+async def public_usage(request: Request, api_key: str):
+    """Public usage page for API key owners. The key itself is the auth."""
+    api_key_manager = request.app.state.api_key_manager
+    metadata = await api_key_manager.validate_key(api_key)
+
+    if not metadata:
+        raise HTTPException(status_code=404, detail="Invalid API key")
+
+    api_key_id = metadata["api_key_id"]
+    stats = await api_key_manager.get_usage_stats(api_key_id)
+    model_usage = await api_key_manager.get_usage_by_model(api_key_id)
+
+    return templates.TemplateResponse(
+        "public/usage.html",
+        {
+            "request": request,
+            "key_name": metadata["name"],
+            "key_id": metadata["key_id"],
+            "stats": stats,
+            "model_usage": model_usage,
+            "usage_limit_tokens": metadata.get("usage_limit_tokens"),
+            "usage_limit_requests": metadata.get("usage_limit_requests"),
+        },
+    )
 
 
 # ==================================================================================================

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Key Usage - {{ key_name }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+    <div class="max-w-4xl mx-auto py-8 px-4">
+        <h1 class="text-2xl font-bold text-gray-800 mb-2">API Key Usage</h1>
+        <p class="text-gray-500 mb-6">{{ key_name }} ({{ key_id }})</p>
+
+        <!-- Usage Summary -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <div class="bg-white rounded-lg shadow p-4">
+                <p class="text-sm text-gray-500">Total Requests</p>
+                <p class="text-2xl font-bold text-gray-800">{{ "{:,}".format(stats.total_requests) }}</p>
+                {% if usage_limit_requests %}
+                <div class="mt-2">
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        {% set pct = (stats.total_requests / usage_limit_requests * 100) | int %}
+                        <div class="h-2 rounded-full {% if pct >= 90 %}bg-red-500{% elif pct >= 70 %}bg-yellow-500{% else %}bg-green-500{% endif %}" style="width: {{ [pct, 100] | min }}%"></div>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-1">{{ "{:,}".format(stats.total_requests) }} / {{ "{:,}".format(usage_limit_requests) }}</p>
+                </div>
+                {% endif %}
+            </div>
+            <div class="bg-white rounded-lg shadow p-4">
+                <p class="text-sm text-gray-500">Total Tokens</p>
+                <p class="text-2xl font-bold text-gray-800">{{ "{:,}".format(stats.total_tokens) }}</p>
+                {% if usage_limit_tokens %}
+                <div class="mt-2">
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        {% set pct = (stats.total_tokens / usage_limit_tokens * 100) | int %}
+                        <div class="h-2 rounded-full {% if pct >= 90 %}bg-red-500{% elif pct >= 70 %}bg-yellow-500{% else %}bg-green-500{% endif %}" style="width: {{ [pct, 100] | min }}%"></div>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-1">{{ "{:,}".format(stats.total_tokens) }} / {{ "{:,}".format(usage_limit_tokens) }}</p>
+                </div>
+                {% endif %}
+            </div>
+            <div class="bg-white rounded-lg shadow p-4">
+                <p class="text-sm text-gray-500">Input Tokens</p>
+                <p class="text-2xl font-bold text-blue-600">{{ "{:,}".format(stats.input_tokens) }}</p>
+            </div>
+            <div class="bg-white rounded-lg shadow p-4">
+                <p class="text-sm text-gray-500">Output Tokens</p>
+                <p class="text-2xl font-bold text-purple-600">{{ "{:,}".format(stats.output_tokens) }}</p>
+            </div>
+        </div>
+
+        <!-- Per-Model Breakdown -->
+        {% if model_usage %}
+        <div class="bg-white rounded-lg shadow">
+            <div class="px-6 py-4 border-b">
+                <h2 class="text-lg font-semibold text-gray-800">Usage by Model</h2>
+            </div>
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Model</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Requests</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Input</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Output</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    {% for model in model_usage %}
+                    <tr>
+                        <td class="px-6 py-3 text-sm font-medium text-gray-900">{{ model.model }}</td>
+                        <td class="px-6 py-3 text-sm text-gray-500 text-right">{{ "{:,}".format(model.requests) }}</td>
+                        <td class="px-6 py-3 text-sm text-gray-500 text-right">{{ "{:,}".format(model.input_tokens) }}</td>
+                        <td class="px-6 py-3 text-sm text-gray-500 text-right">{{ "{:,}".format(model.output_tokens) }}</td>
+                        <td class="px-6 py-3 text-sm font-medium text-gray-900 text-right">{{ "{:,}".format(model.total_tokens) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>
