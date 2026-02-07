@@ -43,6 +43,7 @@ class APIKey(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     key_id = Column(String(64), unique=True, nullable=False, index=True)
     key_hash = Column(String(255), nullable=False)
+    key_encrypted = Column(Text)  # Fernet-encrypted full key for admin viewing
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     name = Column(String(255))
     is_active = Column(Boolean, default=True, nullable=False)

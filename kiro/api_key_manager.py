@@ -62,6 +62,7 @@ class APIKeyManager:
             api_key = APIKey(
                 key_id=key_id,
                 key_hash=key_hash,
+                key_encrypted=self.db.encrypt(key_plaintext),
                 user_id=user_id,
                 name=name,
                 is_active=True,
@@ -335,9 +336,19 @@ class APIKeyManager:
             for key in keys:
                 stats = await self.get_usage_stats(key.id)
                 model_usage = await self.get_usage_by_model(key.id)
+
+                # Decrypt full key if available
+                full_key = None
+                if key.key_encrypted:
+                    try:
+                        full_key = self.db.decrypt(key.key_encrypted)
+                    except Exception:
+                        full_key = None
+
                 keys_with_stats.append({
                     "api_key_id": key.id,
                     "key_id": key.key_id,
+                    "full_key": full_key,
                     "name": key.name,
                     "user_id": key.user_id,
                     "is_active": key.is_active,

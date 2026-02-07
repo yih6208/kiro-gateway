@@ -23,15 +23,8 @@
             </div>
             <div class="ml-3">
                 <p class="text-sm text-green-700">
-                    <strong>API Key Created Successfully!</strong> Copy this key now - it won't be shown again.
+                    <strong>API Key Created Successfully!</strong>
                 </p>
-                <div class="mt-2 flex items-center">
-                    <code class="bg-white px-3 py-2 rounded border border-green-200 text-sm font-mono">{{ request.query_params.get('new_key') }}</code>
-                    <button onclick="navigator.clipboard.writeText('{{ request.query_params.get('new_key') }}')"
-                            class="ml-2 px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700">
-                        Copy
-                    </button>
-                </div>
             </div>
         </div>
     </div>
@@ -55,7 +48,16 @@
                 {% for key in keys %}
                 <tr>
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ key.name or 'Unnamed' }}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">{{ key.key_id }}...</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">
+                        {% if key.full_key %}
+                        <span id="key-hidden-{{ key.api_key_id }}">{{ key.key_id }}...</span>
+                        <span id="key-full-{{ key.api_key_id }}" class="hidden">{{ key.full_key }}</span>
+                        <button onclick="toggleKey({{ key.api_key_id }})" id="key-btn-{{ key.api_key_id }}" class="ml-1 text-xs text-indigo-600 hover:text-indigo-800">Show</button>
+                        <button onclick="navigator.clipboard.writeText('{{ key.full_key }}')" class="ml-1 text-xs text-green-600 hover:text-green-800">Copy</button>
+                        {% else %}
+                        {{ key.key_id }}...
+                        {% endif %}
+                    </td>
                     <td class="px-6 py-4 whitespace-nowrap">
                         {% if key.is_active %}
                         <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Active</span>
@@ -299,6 +301,15 @@ function closeEditLimitsModal() {
 function toggleModelUsage(keyId) {
     const el = document.getElementById(`model-usage-${keyId}`);
     el.classList.toggle('hidden');
+}
+
+function toggleKey(keyId) {
+    const hidden = document.getElementById(`key-hidden-${keyId}`);
+    const full = document.getElementById(`key-full-${keyId}`);
+    const btn = document.getElementById(`key-btn-${keyId}`);
+    hidden.classList.toggle('hidden');
+    full.classList.toggle('hidden');
+    btn.textContent = full.classList.contains('hidden') ? 'Show' : 'Hide';
 }
 </script>
 {% endblock %}
