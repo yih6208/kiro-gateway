@@ -23,6 +23,8 @@ RUN uv pip install --system --no-cache -r requirements.txt
 # 複製應用程式碼（從根目錄）
 COPY kiro ./kiro
 COPY main.py .
+COPY templates ./templates
+COPY migrate_add_usage_limits.py .
 
 # 創建必要的目錄
 RUN mkdir -p debug_logs /root/.local/share/kiro-cli
