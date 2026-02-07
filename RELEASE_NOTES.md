@@ -1,5 +1,24 @@
 # Release Notes
 
+## v2.3.7 (2026-02-07)
+
+**Git Commit:** `a392a4a`
+**Docker Image:** `ghcr.io/yih6208/kiro-gateway:2.3.7`
+
+### Changes
+
+#### Features
+- **Estimated cost display on usage pages** (`a392a4a`)
+  - Added pricing module (`kiro/pricing.py`) with Anthropic API model pricing lookup
+  - Admin usage page (`/admin/usage`) shows estimated total cost and per-model cost
+  - Public usage page (`/usage/{api_key}`) shows estimated cost card and per-model cost
+  - API keys page (`/admin/api-keys`) shows estimated cost per key and in per-model breakdown
+  - Per-model breakdown on API keys page now expands into a full-width row for better readability
+  - Fuzzy model name matching handles variations (e.g., `claude-sonnet-4-5`, `claude-3-5-sonnet`)
+  - Unknown models display "N/A" gracefully
+
+---
+
 ## v2.3.6 (2026-02-06)
 
 **Git Commit:** `68d68ee`
@@ -192,6 +211,7 @@
 
 | Version | Date | Git Commit | Notes |
 |---------|------|------------|-------|
+| 2.3.7 | 2026-02-07 | `a392a4a` | Estimated cost display on usage pages |
 | 2.3.6 | 2026-02-06 | `68d68ee` | Payload estimate fallback for auto-compact accuracy |
 | 2.3.5 | 2026-02-06 | `561fc49` | Fix Opus 4.6 false truncation, improved token estimation |
 | 2.3.4 | 2026-02-06 | `69caf7f` | Remove misleading sonnet 4.5-1m mapping, add pre-request token estimation |
