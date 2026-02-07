@@ -10,7 +10,7 @@ services:
     environment:
       # ===== Multi-Tenant Database =====
       # SQLite database for API keys, accounts, usage tracking
-      - DATABASE_URL=sqlite+aiosqlite:///app/data/kiro_gateway.db
+      - DATABASE_URL=sqlite+aiosqlite:////app/data/kiro_gateway.db
       # Encryption key for sensitive data (generate with: python -c "from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())")
       - ENCRYPTION_KEY=MYwSN7lH58thaPEPhg4cMk6luqs80HS58ZznpJVhyOs=
       # Admin session secret (generate with: python -c "import secrets; print(secrets.token_hex(32))")
