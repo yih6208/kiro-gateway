@@ -811,9 +811,9 @@ class TestBuildKiroPayload:
         
         print(f"Result: {result}")
         model_id = result["conversationState"]["currentMessage"]["userInputMessage"]["modelId"]
-        # claude-sonnet-4-5 should normalize to claude-sonnet-4.5 (dashes→dots)
-        print(f"Comparing model_id: Expected 'claude-sonnet-4.5', Got '{model_id}'")
-        assert model_id == "claude-sonnet-4.5"
+        # claude-sonnet-4-5 normalizes to claude-sonnet-4.5, then auto-upgrades to 1M variant
+        print(f"Comparing model_id: Expected 'claude-sonnet-4.5-1m', Got '{model_id}'")
+        assert model_id == "claude-sonnet-4.5-1m"
     
     def test_includes_tools_in_context(self):
         """

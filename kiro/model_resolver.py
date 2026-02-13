@@ -22,8 +22,8 @@ Dynamic Model Resolution System for Kiro Gateway.
 
 Implements a 4-layer resolution pipeline:
 1. Normalize Name - Convert client formats to Kiro format (dashes→dots, strip dates)
-2. Check Dynamic Cache - Models from /ListAvailableModels API
-3. Check Hidden Models - Manual config for undocumented models
+2. Check Hidden Models - Manual config for undocumented models & auto-upgrades
+3. Check Dynamic Cache - Models from /ListAvailableModels API
 4. Pass-through - Unknown models sent to Kiro (let Kiro decide)
 
 Key Principle: We are a gateway, not a gatekeeper. Kiro API is the final arbiter.
@@ -111,12 +111,13 @@ def normalize_model_name(name: str) -> str:
     # Matches: claude-haiku-4-5, claude-haiku-4-5-20251001, claude-haiku-4-5-latest
     # Groups: (claude-haiku-4), (5), optional suffix
     # IMPORTANT: Minor version is 1-2 digits only! 8-digit dates should NOT match here.
-    standard_pattern = r'^(claude-(?:haiku|sonnet|opus)-\d+)-(\d{1,2})(?:-(?:\d{8}|latest|\d+))?$'
+    standard_pattern = r'^(claude-(?:haiku|sonnet|opus)-\d+)-(\d{1,2})(?:-(1m))?(?:-(?:\d{8}|latest|\d+))?$'
     match = re.match(standard_pattern, name_lower)
     if match:
         base = match.group(1)  # claude-haiku-4
         minor = match.group(2)  # 5
-        return f"{base}.{minor}"  # claude-haiku-4.5
+        suffix = f"-{match.group(3)}" if match.group(3) else ""
+        return f"{base}.{minor}{suffix}"  # claude-haiku-4.5 or claude-sonnet-4.5-1m
     
     # Pattern 2: Standard format without minor - claude-{family}-{major}(-{date})?
     # Matches: claude-sonnet-4, claude-sonnet-4-20250514
@@ -227,8 +228,8 @@ class ModelResolver:
     Resolution layers:
     0. Resolve aliases (custom name mappings)
     1. Normalize name (dashes→dots, strip dates)
-    2. Check dynamic cache (from /ListAvailableModels)
-    3. Check hidden models (manual config)
+    2. Check hidden models (manual config & auto-upgrades)
+    3. Check dynamic cache (from /ListAvailableModels)
     4. Pass-through (let Kiro decide)
     
     Attributes:
@@ -298,18 +299,7 @@ class ModelResolver:
             f"Model resolution: '{external_model}' → normalized: '{normalized}'"
         )
         
-        # Layer 2: Check dynamic cache (from /ListAvailableModels)
-        if self.cache.is_valid_model(normalized):
-            logger.debug(f"Model '{normalized}' found in dynamic cache")
-            return ModelResolution(
-                internal_id=normalized,
-                source="cache",
-                original_request=external_model,
-                normalized=normalized,
-                is_verified=True
-            )
-        
-        # Layer 3: Check hidden models
+        # Layer 2: Check hidden models (before cache so redirects like 1M upgrades take priority)
         if normalized in self.hidden_models:
             internal_id = self.hidden_models[normalized]
             logger.debug(
@@ -318,6 +308,17 @@ class ModelResolver:
             return ModelResolution(
                 internal_id=internal_id,
                 source="hidden",
+                original_request=external_model,
+                normalized=normalized,
+                is_verified=True
+            )
+
+        # Layer 3: Check dynamic cache (from /ListAvailableModels)
+        if self.cache.is_valid_model(normalized):
+            logger.debug(f"Model '{normalized}' found in dynamic cache")
+            return ModelResolution(
+                internal_id=normalized,
+                source="cache",
                 original_request=external_model,
                 normalized=normalized,
                 is_verified=True

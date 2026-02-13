@@ -227,8 +227,9 @@ HIDDEN_MODELS: Dict[str, str] = {
     # Hidden in Kiro API but functional. Great for users who prefer it.
     "claude-3.7-sonnet": "CLAUDE_3_7_SONNET_20250219_V1_0",
 
-    # Add other hidden/experimental models here as discovered.
-    # Example: "claude-secret-model": "INTERNAL_SECRET_MODEL_ID",
+    # Auto-upgrade to 1M context variants (more context is always better)
+    "claude-sonnet-4.5": "claude-sonnet-4.5-1m",
+    "claude-opus-4.6": "claude-opus-4.6-1m",
 }
 
 # ==================================================================================================
@@ -285,11 +286,21 @@ HIDDEN_FROM_LIST: List[str] = ["auto"]
 # - Update gateway regularly to get the latest model list
 FALLBACK_MODELS: List[Dict[str, str]] = [
     {"modelId": "auto"},
+    {"modelId": "claude-opus-4.6"},
+    {"modelId": "claude-opus-4.6-1m"},
+    {"modelId": "claude-opus-4.5"},
+    {"modelId": "claude-sonnet-4.5"},
+    {"modelId": "claude-sonnet-4.5-1m"},
     {"modelId": "claude-sonnet-4"},
     {"modelId": "claude-haiku-4.5"},
-    {"modelId": "claude-sonnet-4.5"},
-    {"modelId": "claude-opus-4.5"},
-    {"modelId": "claude-opus-4.6"},
+    {"modelId": "deepseek-3.2"},
+    {"modelId": "kimi-k2.5"},
+    {"modelId": "minimax-m2.1"},
+    {"modelId": "glm-4.7"},
+    {"modelId": "glm-4.7-flash"},
+    {"modelId": "qwen3-coder-next"},
+    {"modelId": "agi-nova-beta-1m"},
+    {"modelId": "qwen3-coder-480b"},
 ]
 
 # ==================================================================================================

@@ -294,7 +294,11 @@ async def chat_completions(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    
+
+    # Extract the resolved model ID (after normalization + hidden model redirect)
+    # so token calculations use the correct max_input_tokens (e.g., 1M for -1m variants)
+    resolved_model = kiro_payload["conversationState"]["currentMessage"]["userInputMessage"]["modelId"]
+
     # Log Kiro payload
     try:
         kiro_request_body = json.dumps(kiro_payload, ensure_ascii=False, indent=2).encode('utf-8')
@@ -385,7 +389,7 @@ async def chat_completions(
                     async for chunk in stream_kiro_to_openai(
                         http_client.client,
                         response,
-                        request_data.model,
+                        resolved_model,
                         model_cache,
                         auth_manager,
                         request_messages=messages_for_tokenizer,
@@ -434,7 +438,7 @@ async def chat_completions(
             openai_response = await collect_stream_response(
                 http_client.client,
                 response,
-                request_data.model,
+                resolved_model,
                 model_cache,
                 auth_manager,
                 request_messages=messages_for_tokenizer,
