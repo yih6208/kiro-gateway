@@ -358,7 +358,7 @@ def calculate_tokens_from_context_usage(
         max_input_tokens = model_cache.get_max_input_tokens(model)
         total_tokens = int((context_usage_percentage / 100) * max_input_tokens)
         prompt_tokens = max(0, total_tokens - completion_tokens)
-        logger.debug(
+        logger.info(
             f"[Token Calculation] Using context_usage_percentage={context_usage_percentage}%: "
             f"max={max_input_tokens}, total={total_tokens}, completion={completion_tokens}, prompt={prompt_tokens}"
         )
