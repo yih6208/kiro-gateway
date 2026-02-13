@@ -188,7 +188,7 @@ async def messages(
     account_pool = request.app.state.account_pool
     try:
         account_id, auth_manager = await account_pool.get_account()
-        logger.debug(f"Using Kiro account {account_id} for request")
+        logger.info(f"Using Kiro account {account_id} for request")
     except HTTPException as e:
         logger.error(f"Failed to get Kiro account: {e.detail}")
         raise
