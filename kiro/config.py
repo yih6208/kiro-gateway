@@ -229,6 +229,7 @@ HIDDEN_MODELS: Dict[str, str] = {
 
     # Auto-upgrade to 1M context variants (more context is always better)
     "claude-sonnet-4.5": "claude-sonnet-4.5-1m",
+    "claude-sonnet-4.6": "claude-sonnet-4.6-1m",
     "claude-opus-4.6": "claude-opus-4.6-1m",
 }
 

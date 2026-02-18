@@ -119,17 +119,7 @@ router = APIRouter()
 
 @router.get("/")
 async def root():
-    """
-    Health check endpoint.
-    
-    Returns:
-        Status and application version
-    """
-    return {
-        "status": "ok",
-        "message": "Kiro Gateway is running",
-        "version": APP_VERSION
-    }
+    raise HTTPException(status_code=404)
 
 
 @router.get("/health")
