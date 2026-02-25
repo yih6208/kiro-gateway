@@ -1,5 +1,34 @@
 # Release Notes
 
+## v2.3.9 (2026-02-25)
+
+**Git Commit:** `2268368`
+**Docker Image:** `ghcr.io/yih6208/kiro-gateway:multi-account`
+
+### Changes
+
+#### Features
+- **Usage tracking for failed requests** (`2268368`)
+  - Record usage entries (with 0 tokens) for failed requests (400/500) in both OpenAI and Anthropic routes
+  - Immediate flush ensures failed request records are persisted to DB without waiting for batch threshold
+  - Enables tracking of failure counts per API key and per Kiro account
+
+- **Account pool success reporting** (`2268368`)
+  - Call `account_pool.report_success()` on successful streaming and non-streaming completions
+  - Enables multi-account health tracking for the account pool
+
+#### Security
+- **bcrypt 72-byte input limit guard** (`2268368`)
+  - Reject API keys longer than 72 bytes before bcrypt verification
+  - Prevents silent truncation that could cause hash collisions
+
+#### Bug Fixes
+- **Streaming error usage recording** (`2268368`)
+  - Record partial token usage when streaming errors occur in both OpenAI and Anthropic streaming modules
+  - Previously streaming errors were not tracked at all
+
+---
+
 ## v2.3.8 (2026-02-18)
 
 **Git Commit:** `ccef68d`
@@ -229,6 +258,7 @@
 
 | Version | Date | Git Commit | Notes |
 |---------|------|------------|-------|
+| 2.3.9 | 2026-02-25 | `2268368` | Usage tracking for failed requests, account pool success reporting |
 | 2.3.8 | 2026-02-18 | `ccef68d` | Auto-upgrade claude-sonnet-4.6 to 1M context |
 | 2.3.7 | 2026-02-07 | `a392a4a` | Estimated cost display on usage pages |
 | 2.3.6 | 2026-02-06 | `68d68ee` | Payload estimate fallback for auto-compact accuracy |
