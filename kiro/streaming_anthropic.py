@@ -586,7 +586,19 @@ async def stream_kiro_to_anthropic(
         error_type = type(e).__name__
         error_msg = str(e) if str(e) else "(empty message)"
         logger.error(f"Error during Anthropic streaming: [{error_type}] {error_msg}", exc_info=True)
-        
+
+        # Record failed request
+        if usage_tracker and api_key_id and kiro_account_id:
+            try:
+                await usage_tracker.record_request(
+                    api_key_id=api_key_id, kiro_account_id=kiro_account_id,
+                    model=model, endpoint="/v1/messages",
+                    input_tokens=input_tokens, output_tokens=output_tokens,
+                    status_code=500, duration_ms=0)
+                await usage_tracker.flush()
+            except Exception:
+                pass
+
         # Send error event
         yield format_sse_event("error", {
             "type": "error",

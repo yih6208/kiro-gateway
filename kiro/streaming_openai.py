@@ -383,6 +383,19 @@ async def stream_kiro_to_openai_internal(
             f"Error during streaming: [{error_type}] {error_msg}",
             exc_info=True
         )
+
+        # Record failed request
+        if usage_tracker and api_key_id and kiro_account_id:
+            try:
+                await usage_tracker.record_request(
+                    api_key_id=api_key_id, kiro_account_id=kiro_account_id,
+                    model=model, endpoint="/v1/chat/completions",
+                    input_tokens=prompt_tokens, output_tokens=completion_tokens,
+                    status_code=500, duration_ms=0)
+                await usage_tracker.flush()
+            except Exception:
+                pass
+
         # Propagate error up for proper handling in routes_openai.py
         raise
     finally:

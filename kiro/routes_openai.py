@@ -348,7 +348,17 @@ async def chat_completions(
             logger.warning(
                 f"HTTP {response.status_code} - POST /v1/chat/completions - {error_message[:100]}"
             )
-            
+
+            # Record failed request usage
+            try:
+                await request.app.state.usage_tracker.record_request(
+                    api_key_id=key_metadata["api_key_id"], kiro_account_id=account_id,
+                    model=request_data.model, endpoint="/v1/chat/completions",
+                    input_tokens=0, output_tokens=0, status_code=response.status_code, duration_ms=0)
+                await request.app.state.usage_tracker.flush()
+            except Exception:
+                pass
+
             # Flush debug logs on error ("errors" mode)
             if debug_logger:
                 debug_logger.flush_on_error(response.status_code, error_message)
@@ -413,6 +423,7 @@ async def chat_completions(
                         logger.info(f"HTTP 200 - POST /v1/chat/completions (streaming) - client disconnected")
                     else:
                         logger.info(f"HTTP 200 - POST /v1/chat/completions (streaming) - completed")
+                        await account_pool.report_success(account_id)
                     # Write debug logs AFTER streaming completes
                     if debug_logger:
                         if streaming_error:
@@ -439,6 +450,7 @@ async def chat_completions(
             
             # Log access log for non-streaming success
             logger.info(f"HTTP 200 - POST /v1/chat/completions (non-streaming) - completed")
+            await account_pool.report_success(account_id)
             
             # Write debug logs after non-streaming request completes
             if debug_logger:
@@ -450,6 +462,14 @@ async def chat_completions(
         await http_client.close()
         # Log access log for HTTP error
         logger.error(f"HTTP {e.status_code} - POST /v1/chat/completions - {e.detail}")
+        try:
+            await request.app.state.usage_tracker.record_request(
+                api_key_id=key_metadata["api_key_id"], kiro_account_id=account_id,
+                model=request_data.model, endpoint="/v1/chat/completions",
+                input_tokens=0, output_tokens=0, status_code=e.status_code, duration_ms=0)
+            await request.app.state.usage_tracker.flush()
+        except Exception:
+            pass
         # Flush debug logs on HTTP error ("errors" mode)
         if debug_logger:
             debug_logger.flush_on_error(e.status_code, str(e.detail))
@@ -459,6 +479,14 @@ async def chat_completions(
         logger.error(f"Internal error: {e}", exc_info=True)
         # Log access log for internal error
         logger.error(f"HTTP 500 - POST /v1/chat/completions - {str(e)[:100]}")
+        try:
+            await request.app.state.usage_tracker.record_request(
+                api_key_id=key_metadata["api_key_id"], kiro_account_id=account_id,
+                model=request_data.model, endpoint="/v1/chat/completions",
+                input_tokens=0, output_tokens=0, status_code=500, duration_ms=0)
+            await request.app.state.usage_tracker.flush()
+        except Exception:
+            pass
         # Flush debug logs on internal error ("errors" mode)
         if debug_logger:
             debug_logger.flush_on_error(500, str(e))

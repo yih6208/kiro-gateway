@@ -115,8 +115,11 @@ class APIKeyManager:
             if not api_key:
                 return None
 
-            # Verify hash with bcrypt
-            if not bcrypt.checkpw(key_plaintext.encode(), api_key.key_hash.encode()):
+            # Verify hash with bcrypt (bcrypt has 72-byte limit)
+            key_bytes = key_plaintext.encode()
+            if len(key_bytes) > 72:
+                return None
+            if not bcrypt.checkpw(key_bytes, api_key.key_hash.encode()):
                 return None
 
             # Check if active

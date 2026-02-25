@@ -424,7 +424,17 @@ async def messages(
             logger.warning(
                 f"HTTP {response.status_code} - POST /v1/messages - {error_message[:100]}"
             )
-            
+
+            # Record failed request usage
+            try:
+                await request.app.state.usage_tracker.record_request(
+                    api_key_id=key_metadata["api_key_id"], kiro_account_id=account_id,
+                    model=request_data.model, endpoint="/v1/messages",
+                    input_tokens=0, output_tokens=0, status_code=response.status_code, duration_ms=0)
+                await request.app.state.usage_tracker.flush()
+            except Exception:
+                pass
+
             # Flush debug logs on error
             if debug_logger:
                 debug_logger.flush_on_error(response.status_code, error_message)
@@ -481,6 +491,7 @@ async def messages(
                         logger.info(f"HTTP 200 - POST /v1/messages (streaming) - client disconnected")
                     else:
                         logger.info(f"HTTP 200 - POST /v1/messages (streaming) - completed")
+                        await account_pool.report_success(account_id)
                     
                     if debug_logger:
                         if streaming_error:
@@ -515,6 +526,7 @@ async def messages(
             await http_client.close()
 
             logger.info(f"HTTP 200 - POST /v1/messages (non-streaming) - completed")
+            await account_pool.report_success(account_id)
             
             if debug_logger:
                 debug_logger.discard_buffers()
@@ -524,6 +536,14 @@ async def messages(
     except HTTPException as e:
         await http_client.close()
         logger.error(f"HTTP {e.status_code} - POST /v1/messages - {e.detail}")
+        try:
+            await request.app.state.usage_tracker.record_request(
+                api_key_id=key_metadata["api_key_id"], kiro_account_id=account_id,
+                model=request_data.model, endpoint="/v1/messages",
+                input_tokens=0, output_tokens=0, status_code=e.status_code, duration_ms=0)
+            await request.app.state.usage_tracker.flush()
+        except Exception:
+            pass
         if debug_logger:
             debug_logger.flush_on_error(e.status_code, str(e.detail))
         raise
@@ -531,6 +551,14 @@ async def messages(
         await http_client.close()
         logger.error(f"Internal error: {e}", exc_info=True)
         logger.error(f"HTTP 500 - POST /v1/messages - {str(e)[:100]}")
+        try:
+            await request.app.state.usage_tracker.record_request(
+                api_key_id=key_metadata["api_key_id"], kiro_account_id=account_id,
+                model=request_data.model, endpoint="/v1/messages",
+                input_tokens=0, output_tokens=0, status_code=500, duration_ms=0)
+            await request.app.state.usage_tracker.flush()
+        except Exception:
+            pass
         if debug_logger:
             debug_logger.flush_on_error(500, str(e))
         
