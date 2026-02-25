@@ -1,5 +1,23 @@
 # Release Notes
 
+## v2.3.8 (2026-02-18)
+
+**Git Commit:** `ccef68d`
+**Docker Image:** `ghcr.io/yih6208/kiro-gateway:multi-account`
+
+### Changes
+
+#### Features
+- **Auto-upgrade claude-sonnet-4.6 to 1M context** (`ccef68d`)
+  - Added `claude-sonnet-4.6` → `claude-sonnet-4.6-1m` mapping in HIDDEN_MODELS
+  - Claude Code sends `claude-sonnet-4-6` without any 1m flag, so gateway-side mapping is required
+  - All three 1M-capable Claude models now auto-upgrade: sonnet 4.5, sonnet 4.6, opus 4.6
+
+#### Other
+- Disable root endpoint (`/`) health info — now returns 404
+
+---
+
 ## v2.3.7 (2026-02-07)
 
 **Git Commit:** `a392a4a`
@@ -211,6 +229,7 @@
 
 | Version | Date | Git Commit | Notes |
 |---------|------|------------|-------|
+| 2.3.8 | 2026-02-18 | `ccef68d` | Auto-upgrade claude-sonnet-4.6 to 1M context |
 | 2.3.7 | 2026-02-07 | `a392a4a` | Estimated cost display on usage pages |
 | 2.3.6 | 2026-02-06 | `68d68ee` | Payload estimate fallback for auto-compact accuracy |
 | 2.3.5 | 2026-02-06 | `561fc49` | Fix Opus 4.6 false truncation, improved token estimation |
