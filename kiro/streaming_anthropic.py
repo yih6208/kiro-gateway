@@ -111,6 +111,41 @@ def extract_tool_fields(tc: Dict[str, Any]) -> tuple:
     return tool_id, tool_name, tool_input
 
 
+def emit_tool_use_sse_blocks(
+    tc: Dict[str, Any], block_index: int
+) -> List[str]:
+    """
+    Build SSE events for a tool_use block (start + delta + stop).
+
+    Returns a list of SSE event strings.
+    """
+    tool_id, tool_name, tool_input = extract_tool_fields(tc)
+    return [
+        format_sse_event("content_block_start", {
+            "type": "content_block_start",
+            "index": block_index,
+            "content_block": {
+                "type": "tool_use",
+                "id": tool_id,
+                "name": tool_name,
+                "input": {},
+            },
+        }),
+        format_sse_event("content_block_delta", {
+            "type": "content_block_delta",
+            "index": block_index,
+            "delta": {
+                "type": "input_json_delta",
+                "partial_json": json.dumps(tool_input, ensure_ascii=False),
+            },
+        }),
+        format_sse_event("content_block_stop", {
+            "type": "content_block_stop",
+            "index": block_index,
+        }),
+    ]
+
+
 async def stream_kiro_to_anthropic(
     response: httpx.Response,
     model: str,
@@ -325,36 +360,11 @@ async def stream_kiro_to_anthropic(
                         "name": tool_name,
                         "truncation_info": tool.get('_truncation_info', {})
                     })
-                
-                # Send tool_use block start
-                yield format_sse_event("content_block_start", {
-                    "type": "content_block_start",
-                    "index": current_block_index,
-                    "content_block": {
-                        "type": "tool_use",
-                        "id": tool_id,
-                        "name": tool_name,
-                        "input": {}
-                    }
-                })
-                
-                # Send tool input as delta
-                input_json = json.dumps(tool_input, ensure_ascii=False)
-                yield format_sse_event("content_block_delta", {
-                    "type": "content_block_delta",
-                    "index": current_block_index,
-                    "delta": {
-                        "type": "input_json_delta",
-                        "partial_json": input_json
-                    }
-                })
-                
-                # Close tool block
-                yield format_sse_event("content_block_stop", {
-                    "type": "content_block_stop",
-                    "index": current_block_index
-                })
-                
+
+                # Emit tool_use SSE blocks
+                for sse_chunk in emit_tool_use_sse_blocks(tool, current_block_index):
+                    yield sse_chunk
+
                 tool_blocks.append({
                     "id": tool_id,
                     "name": tool_name,
@@ -416,32 +426,9 @@ async def stream_kiro_to_anthropic(
             for tc in bracket_tool_calls:
                 tool_id, tool_name, tool_input = extract_tool_fields(tc)
 
-                yield format_sse_event("content_block_start", {
-                    "type": "content_block_start",
-                    "index": current_block_index,
-                    "content_block": {
-                        "type": "tool_use",
-                        "id": tool_id,
-                        "name": tool_name,
-                        "input": {}
-                    }
-                })
-                
-                input_json = json.dumps(tool_input, ensure_ascii=False)
-                yield format_sse_event("content_block_delta", {
-                    "type": "content_block_delta",
-                    "index": current_block_index,
-                    "delta": {
-                        "type": "input_json_delta",
-                        "partial_json": input_json
-                    }
-                })
-                
-                yield format_sse_event("content_block_stop", {
-                    "type": "content_block_stop",
-                    "index": current_block_index
-                })
-                
+                for sse_chunk in emit_tool_use_sse_blocks(tc, current_block_index):
+                    yield sse_chunk
+
                 tool_blocks.append({
                     "id": tool_id,
                     "name": tool_name,

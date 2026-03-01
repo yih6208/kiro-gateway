@@ -38,7 +38,7 @@ from kiro.mcp_client import (
     generate_server_tool_id,
     MCPToolError,
 )
-from kiro.streaming_anthropic import format_sse_event, generate_message_id, generate_thinking_signature, extract_tool_fields
+from kiro.streaming_anthropic import format_sse_event, generate_message_id, generate_thinking_signature, extract_tool_fields, emit_tool_use_sse_blocks
 from kiro.streaming_core import parse_kiro_stream, collect_stream_to_result, calculate_tokens_from_context_usage
 from kiro.tokenizer import count_tokens, count_message_tokens
 from kiro.config import FIRST_TOKEN_TIMEOUT, FAKE_REASONING_HANDLING
@@ -214,7 +214,7 @@ async def stream_with_server_tool_loop(
             if not server_tools:
                 # All client-side — emit tool_use blocks normally
                 for tc in client_tools:
-                    async for chunk in _emit_tool_use_block(tc, block_index):
+                    for chunk in emit_tool_use_sse_blocks(tc, block_index):
                         yield chunk
                     block_index += 1
                 break
@@ -278,7 +278,7 @@ async def stream_with_server_tool_loop(
             if client_tools:
                 # Mixed: server tools done, emit client-side tool_use blocks and stop
                 for tc in client_tools:
-                    async for chunk in _emit_tool_use_block(tc, block_index):
+                    for chunk in emit_tool_use_sse_blocks(tc, block_index):
                         yield chunk
                     block_index += 1
                 break
@@ -531,38 +531,6 @@ async def _stream_single_turn(
         turn_result.full_content + turn_result.full_thinking
     )
     turn_result.next_block_index = block_index
-
-
-async def _emit_tool_use_block(
-    tc: Dict[str, Any], block_index: int
-) -> AsyncGenerator[str, None]:
-    """Emit a standard tool_use block (for client-side tools)."""
-    tool_id, tool_name, tool_input = extract_tool_fields(tc)
-
-    yield format_sse_event("content_block_start", {
-        "type": "content_block_start",
-        "index": block_index,
-        "content_block": {
-            "type": "tool_use",
-            "id": tool_id,
-            "name": tool_name,
-            "input": {},
-        },
-    })
-
-    yield format_sse_event("content_block_delta", {
-        "type": "content_block_delta",
-        "index": block_index,
-        "delta": {
-            "type": "input_json_delta",
-            "partial_json": json.dumps(tool_input, ensure_ascii=False),
-        },
-    })
-
-    yield format_sse_event("content_block_stop", {
-        "type": "content_block_stop",
-        "index": block_index,
-    })
 
 
 async def collect_with_server_tools(
