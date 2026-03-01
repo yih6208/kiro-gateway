@@ -88,14 +88,27 @@ def format_sse_event(event_type: str, data: Dict[str, Any]) -> str:
 def generate_thinking_signature() -> str:
     """
     Generate a placeholder signature for thinking content blocks.
-    
+
     In real Anthropic API, this is a cryptographic signature for verification.
     Since we're using fake reasoning via tag injection, we generate a placeholder.
-    
+
     Returns:
         Placeholder signature string
     """
     return f"sig_{uuid.uuid4().hex[:32]}"
+
+
+def extract_tool_fields(tc: Dict[str, Any]) -> tuple:
+    """Extract (tool_id, tool_name, tool_input) from a Kiro tool call dict."""
+    tool_id = tc.get("id") or f"toolu_{uuid.uuid4().hex[:24]}"
+    tool_name = tc.get("function", {}).get("name", "") or tc.get("name", "")
+    tool_input = tc.get("function", {}).get("arguments", {}) or tc.get("input", {})
+    if isinstance(tool_input, str):
+        try:
+            tool_input = json.loads(tool_input)
+        except json.JSONDecodeError:
+            tool_input = {}
+    return tool_id, tool_name, tool_input
 
 
 async def stream_kiro_to_anthropic(
@@ -303,10 +316,8 @@ async def stream_kiro_to_anthropic(
                     current_block_index += 1
                 
                 tool = event.tool_use
-                tool_id = tool.get("id") or f"toolu_{uuid.uuid4().hex[:24]}"
-                tool_name = tool.get("function", {}).get("name", "") or tool.get("name", "")
-                tool_input = tool.get("function", {}).get("arguments", {}) or tool.get("input", {})
-                
+                tool_id, tool_name, tool_input = extract_tool_fields(tool)
+
                 # Check if this tool was truncated
                 if tool.get('_truncation_detected'):
                     truncated_tools.append({
@@ -314,13 +325,6 @@ async def stream_kiro_to_anthropic(
                         "name": tool_name,
                         "truncation_info": tool.get('_truncation_info', {})
                     })
-                
-                # Parse arguments if string
-                if isinstance(tool_input, str):
-                    try:
-                        tool_input = json.loads(tool_input)
-                    except json.JSONDecodeError:
-                        tool_input = {}
                 
                 # Send tool_use block start
                 yield format_sse_event("content_block_start", {
@@ -410,16 +414,8 @@ async def stream_kiro_to_anthropic(
                 current_block_index += 1
             
             for tc in bracket_tool_calls:
-                tool_id = tc.get("id") or f"toolu_{uuid.uuid4().hex[:24]}"
-                tool_name = tc.get("function", {}).get("name", "")
-                tool_input = tc.get("function", {}).get("arguments", {})
-                
-                if isinstance(tool_input, str):
-                    try:
-                        tool_input = json.loads(tool_input)
-                    except json.JSONDecodeError:
-                        tool_input = {}
-                
+                tool_id, tool_name, tool_input = extract_tool_fields(tc)
+
                 yield format_sse_event("content_block_start", {
                     "type": "content_block_start",
                     "index": current_block_index,
@@ -680,16 +676,8 @@ async def collect_anthropic_response(
     
     # Add tool use blocks
     for tc in result.tool_calls:
-        tool_id = tc.get("id") or f"toolu_{uuid.uuid4().hex[:24]}"
-        tool_name = tc.get("function", {}).get("name", "") or tc.get("name", "")
-        tool_input = tc.get("function", {}).get("arguments", {}) or tc.get("input", {})
-        
-        if isinstance(tool_input, str):
-            try:
-                tool_input = json.loads(tool_input)
-            except json.JSONDecodeError:
-                tool_input = {}
-        
+        tool_id, tool_name, tool_input = extract_tool_fields(tc)
+
         content_blocks.append({
             "type": "tool_use",
             "id": tool_id,

@@ -38,7 +38,7 @@ from kiro.mcp_client import (
     generate_server_tool_id,
     MCPToolError,
 )
-from kiro.streaming_anthropic import format_sse_event, generate_message_id, generate_thinking_signature
+from kiro.streaming_anthropic import format_sse_event, generate_message_id, generate_thinking_signature, extract_tool_fields
 from kiro.streaming_core import parse_kiro_stream, collect_stream_to_result, calculate_tokens_from_context_usage
 from kiro.tokenizer import count_tokens, count_message_tokens
 from kiro.config import FIRST_TOKEN_TIMEOUT, FAKE_REASONING_HANDLING
@@ -51,19 +51,6 @@ if TYPE_CHECKING:
 MAX_SERVER_TOOL_LOOPS = 5
 
 
-def _extract_tool_fields(tc: Dict[str, Any]) -> tuple:
-    """Extract (tool_id, tool_name, tool_input) from a Kiro tool call dict."""
-    tool_id = tc.get("id") or f"toolu_{uuid.uuid4().hex[:24]}"
-    tool_name = tc.get("function", {}).get("name", "") or tc.get("name", "")
-    tool_input = tc.get("function", {}).get("arguments", {}) or tc.get("input", {})
-    if isinstance(tool_input, str):
-        try:
-            tool_input = json.loads(tool_input)
-        except json.JSONDecodeError:
-            tool_input = {}
-    return tool_id, tool_name, tool_input
-
-
 def _get_tool_name(tc: Dict[str, Any]) -> str:
     """Extract tool name from a Kiro tool call dict."""
     return tc.get("function", {}).get("name", "") or tc.get("name", "")
@@ -71,7 +58,7 @@ def _get_tool_name(tc: Dict[str, Any]) -> str:
 
 def _build_tool_use_content_block(tc: Dict[str, Any]) -> Dict[str, Any]:
     """Build an Anthropic tool_use content block from a Kiro tool call."""
-    tool_id, tool_name, tool_input = _extract_tool_fields(tc)
+    tool_id, tool_name, tool_input = extract_tool_fields(tc)
     return {"type": "tool_use", "id": tool_id, "name": tool_name, "input": tool_input}
 
 
@@ -235,7 +222,7 @@ async def stream_with_server_tool_loop(
             # Execute server-side tools and emit blocks to client
             server_tool_results = []
             for tc in server_tools:
-                _, name, args = _extract_tool_fields(tc)
+                _, name, args = extract_tool_fields(tc)
 
                 if name == "web_search":
                     web_search_count += 1
@@ -550,7 +537,7 @@ async def _emit_tool_use_block(
     tc: Dict[str, Any], block_index: int
 ) -> AsyncGenerator[str, None]:
     """Emit a standard tool_use block (for client-side tools)."""
-    tool_id, tool_name, tool_input = _extract_tool_fields(tc)
+    tool_id, tool_name, tool_input = extract_tool_fields(tc)
 
     yield format_sse_event("content_block_start", {
         "type": "content_block_start",
@@ -653,7 +640,7 @@ async def collect_with_server_tools(
         # Execute server-side tools
         server_tool_results = []
         for tc in server_tools:
-            _, name, args = _extract_tool_fields(tc)
+            _, name, args = extract_tool_fields(tc)
 
             if name == "web_search":
                 web_search_count += 1
