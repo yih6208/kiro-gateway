@@ -1,5 +1,32 @@
 # Release Notes
 
+## v2.4.0 (2026-03-01)
+
+**Git Commit:** `cadded9`
+**Docker Image:** `ghcr.io/yih6208/kiro-gateway:multi-account`
+
+### Changes
+
+#### Features
+- **Server-side web search via InvokeMCP** (`88e4eab`)
+  - Detect `web_search_20250305` tool from Claude Code, inject synthetic tool definition for Kiro
+  - Execute search via Kiro's InvokeMCP endpoint, send results back to Kiro for final answer
+  - Emit `server_tool_use` + `web_search_tool_result` blocks in Anthropic format
+  - Support both streaming and non-streaming paths with continuation loop
+  - New files: `kiro/mcp_client.py`, `kiro/server_tools.py`
+
+#### Bug Fixes
+- **Fix aiosqlite OperationalError on streaming teardown** (`88e4eab`)
+  - Switch SQLAlchemy engine to `NullPool` for SQLite — eliminates connection pool cleanup race condition
+  - Resolves `no active connection` errors when Starlette middleware cancels request scope
+
+#### Refactoring
+- Extract `extract_tool_fields` and `emit_tool_use_sse_blocks` as shared helpers (`c0c4ef5`, `cadded9`)
+- Deduplicate tool field extraction across streaming_anthropic.py and server_tools.py
+- Remove ~100 lines of duplicated code
+
+---
+
 ## v2.3.9 (2026-02-25)
 
 **Git Commit:** `2268368`
