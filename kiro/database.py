@@ -18,6 +18,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.pool import NullPool
 
 Base = declarative_base()
 
@@ -116,6 +117,7 @@ class Database:
             database_url,
             echo=False,
             future=True,
+            poolclass=NullPool,
         )
         self.SessionLocal = sessionmaker(
             self.engine,

@@ -335,9 +335,32 @@ def convert_anthropic_messages(
     return unified_messages
 
 
+_SYNTHETIC_TOOL_DEFINITIONS = {
+    "web_search": UnifiedTool(
+        name="web_search",
+        description="Search the web for current information. Use this when you need up-to-date information from the internet.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "The search query to look up on the web.",
+                }
+            },
+            "required": ["query"],
+        },
+    ),
+}
+
+
+def _get_synthetic_tool_definition(tool_name: str) -> Optional[UnifiedTool]:
+    """Get a synthetic tool definition for a server-side tool."""
+    return _SYNTHETIC_TOOL_DEFINITIONS.get(tool_name)
+
+
 def convert_anthropic_tools(
     tools: Optional[List[AnthropicTool]],
-) -> Optional[List[UnifiedTool]]:
+) -> tuple[Optional[List[UnifiedTool]], bool]:
     """
     Converts Anthropic tools to unified format.
 
@@ -345,33 +368,60 @@ def convert_anthropic_tools(
         tools: List of Anthropic tools
 
     Returns:
-        List of tools in unified format, or None if no tools
+        Tuple of:
+        - List of tools in unified format, or None if no tools
+        - Boolean indicating if server-side tools (web_search/web_fetch) were detected
     """
     if not tools:
-        return None
+        return None, False
+
+    from kiro.mcp_client import SERVER_SIDE_TOOLS
 
     unified_tools = []
+    has_server_side_tools = False
+
     for tool in tools:
         # Handle both dict and Pydantic model
         if isinstance(tool, dict):
+            tool_type = tool.get("type")
             name = tool.get("name", "")
             description = tool.get("description")
-            input_schema = tool.get("input_schema", {})
+            input_schema = tool.get("input_schema")
         else:
+            tool_type = getattr(tool, "type", None)
             name = tool.name
             description = tool.description
             input_schema = tool.input_schema
 
+        # Detect server-side tools (e.g. web_search_20250305) — these will be
+        # intercepted and executed via InvokeMCP during streaming.
+        # We inject a synthetic tool definition so Kiro's model knows it can
+        # emit tool_use events for web_search/web_fetch.
+        if not input_schema and tool_type and tool_type != "custom":
+            # Check if this maps to a tool we can execute server-side
+            # web_search_20250305 -> web_search, etc.
+            base_name = tool_type.split("_2025")[0] if "_2025" in tool_type else tool_type
+            if base_name in SERVER_SIDE_TOOLS:
+                has_server_side_tools = True
+                logger.info(f"Detected server-side tool: {tool_type} (will inject as '{base_name}' for Kiro + execute via InvokeMCP)")
+                # Inject synthetic tool definition so the model can call it
+                synthetic = _get_synthetic_tool_definition(base_name)
+                if synthetic:
+                    unified_tools.append(synthetic)
+            else:
+                logger.debug(f"Skipping unknown server-side tool: {tool_type} ({name})")
+            continue
+
         unified_tools.append(
-            UnifiedTool(name=name, description=description, input_schema=input_schema)
+            UnifiedTool(name=name, description=description, input_schema=input_schema or {})
         )
 
-    return unified_tools if unified_tools else None
+    return (unified_tools if unified_tools else None), has_server_side_tools
 
 
 def anthropic_to_kiro(
     request: AnthropicMessagesRequest, conversation_id: str, profile_arn: str
-) -> dict:
+) -> tuple[dict, bool]:
     """
     Converts Anthropic Messages API request to Kiro API payload.
 
@@ -388,7 +438,9 @@ def anthropic_to_kiro(
         profile_arn: AWS CodeWhisperer profile ARN
 
     Returns:
-        Payload dictionary for POST request to Kiro API
+        Tuple of:
+        - Payload dictionary for POST request to Kiro API
+        - Boolean indicating if server-side tools (web_search/web_fetch) were detected
 
     Raises:
         ValueError: If there are no messages to send
@@ -397,7 +449,7 @@ def anthropic_to_kiro(
     unified_messages = convert_anthropic_messages(request.messages)
 
     # Convert tools to unified format
-    unified_tools = convert_anthropic_tools(request.tools)
+    unified_tools, has_server_side_tools = convert_anthropic_tools(request.tools)
 
     # System prompt is already separate in Anthropic format!
     # It can be a string or list of content blocks (for prompt caching)
@@ -406,15 +458,15 @@ def anthropic_to_kiro(
     # Get model ID for Kiro API (normalizes + resolves hidden models)
     # Pass-through principle: we normalize and send to Kiro, Kiro decides if valid
     model_id = get_model_id_for_kiro(request.model, HIDDEN_MODELS)
-    
+
     logger.info(
         f"🔄 Model conversion: '{request.model}' -> '{model_id}'"
     )
-    
+
     logger.debug(
         f"Converting Anthropic request: model={request.model} -> {model_id}, "
         f"messages={len(unified_messages)}, tools={len(unified_tools) if unified_tools else 0}, "
-        f"system_prompt_length={len(system_prompt)}"
+        f"system_prompt_length={len(system_prompt)}, server_side_tools={has_server_side_tools}"
     )
 
     # Use core function to build payload
@@ -428,4 +480,4 @@ def anthropic_to_kiro(
         inject_thinking=True,
     )
 
-    return result.payload
+    return result.payload, has_server_side_tools

@@ -1324,10 +1324,11 @@ class TestConvertAnthropicTools:
         print("Setup: None tools...")
 
         print("Action: Converting tools...")
-        result = convert_anthropic_tools(None)
+        result, has_server_tools = convert_anthropic_tools(None)
 
         print(f"Comparing result: Expected None, Got {result}")
         assert result is None
+        assert has_server_tools is False
 
     def test_returns_none_for_empty_list(self):
         """
@@ -1337,10 +1338,11 @@ class TestConvertAnthropicTools:
         print("Setup: Empty tools list...")
 
         print("Action: Converting tools...")
-        result = convert_anthropic_tools([])
+        result, has_server_tools = convert_anthropic_tools([])
 
         print(f"Comparing result: Expected None, Got {result}")
         assert result is None
+        assert has_server_tools is False
 
     def test_converts_tool_from_pydantic_model(self):
         """
@@ -1360,7 +1362,7 @@ class TestConvertAnthropicTools:
         ]
 
         print("Action: Converting tools...")
-        result = convert_anthropic_tools(tools)
+        result, has_server_tools = convert_anthropic_tools(tools)
 
         print(f"Result: {result}")
         assert result is not None
@@ -1391,7 +1393,7 @@ class TestConvertAnthropicTools:
         ]
 
         print("Action: Converting tools...")
-        result = convert_anthropic_tools(tools)
+        result, has_server_tools = convert_anthropic_tools(tools)
 
         print(f"Result: {result}")
         assert result is not None
@@ -1411,7 +1413,7 @@ class TestConvertAnthropicTools:
         ]
 
         print("Action: Converting tools...")
-        result = convert_anthropic_tools(tools)
+        result, has_server_tools = convert_anthropic_tools(tools)
 
         print(f"Result: {result}")
         assert result is not None
@@ -1428,7 +1430,7 @@ class TestConvertAnthropicTools:
         tools = [AnthropicTool(name="test_tool", input_schema={})]
 
         print("Action: Converting tools...")
-        result = convert_anthropic_tools(tools)
+        result, has_server_tools = convert_anthropic_tools(tools)
 
         print(f"Result: {result}")
         assert result is not None
@@ -1461,7 +1463,7 @@ class TestAnthropicToKiro:
             return_value="claude-sonnet-4.5",
         ):
             with patch("kiro.converters_core.FAKE_REASONING_ENABLED", False):
-                result = anthropic_to_kiro(request, "conv-123", "arn:aws:test")
+                result, has_server_tools = anthropic_to_kiro(request, "conv-123", "arn:aws:test")
 
         print(f"Result: {result}")
         assert "conversationState" in result
@@ -1469,6 +1471,7 @@ class TestAnthropicToKiro:
         assert "currentMessage" in result["conversationState"]
         assert "userInputMessage" in result["conversationState"]["currentMessage"]
         assert result["profileArn"] == "arn:aws:test"
+        assert has_server_tools is False
 
     def test_includes_system_prompt(self):
         """
@@ -1489,7 +1492,7 @@ class TestAnthropicToKiro:
             return_value="claude-sonnet-4.5",
         ):
             with patch("kiro.converters_core.FAKE_REASONING_ENABLED", False):
-                result = anthropic_to_kiro(request, "conv-123", "arn:aws:test")
+                result, _ = anthropic_to_kiro(request, "conv-123", "arn:aws:test")
 
         print(f"Result: {result}")
         current_content = result["conversationState"]["currentMessage"][
@@ -1526,7 +1529,7 @@ class TestAnthropicToKiro:
             return_value="claude-sonnet-4.5",
         ):
             with patch("kiro.converters_core.FAKE_REASONING_ENABLED", False):
-                result = anthropic_to_kiro(request, "conv-123", "arn:aws:test")
+                result, _ = anthropic_to_kiro(request, "conv-123", "arn:aws:test")
 
         print(f"Result: {result}")
         context = result["conversationState"]["currentMessage"]["userInputMessage"].get(
@@ -1559,7 +1562,7 @@ class TestAnthropicToKiro:
             return_value="claude-sonnet-4.5",
         ):
             with patch("kiro.converters_core.FAKE_REASONING_ENABLED", False):
-                result = anthropic_to_kiro(request, "conv-123", "arn:aws:test")
+                result, _ = anthropic_to_kiro(request, "conv-123", "arn:aws:test")
 
         print(f"Result: {result}")
         history = result["conversationState"].get("history", [])
@@ -1621,7 +1624,7 @@ class TestAnthropicToKiro:
             return_value="claude-sonnet-4.5",
         ):
             with patch("kiro.converters_core.FAKE_REASONING_ENABLED", False):
-                result = anthropic_to_kiro(request, "conv-123", "arn:aws:test")
+                result, _ = anthropic_to_kiro(request, "conv-123", "arn:aws:test")
 
         print(f"Result: {result}")
 
@@ -1677,7 +1680,7 @@ class TestAnthropicToKiro:
         ):
             with patch("kiro.converters_core.FAKE_REASONING_ENABLED", True):
                 with patch("kiro.converters_core.FAKE_REASONING_MAX_TOKENS", 4000):
-                    result = anthropic_to_kiro(request, "conv-123", "arn:aws:test")
+                    result, _ = anthropic_to_kiro(request, "conv-123", "arn:aws:test")
 
         print(f"Result: {result}")
         current_content = result["conversationState"]["currentMessage"][
@@ -1727,7 +1730,7 @@ class TestAnthropicToKiro:
         ):
             with patch("kiro.converters_core.FAKE_REASONING_ENABLED", True):
                 with patch("kiro.converters_core.FAKE_REASONING_MAX_TOKENS", 4000):
-                    result = anthropic_to_kiro(request, "conv-123", "arn:aws:test")
+                    result, _ = anthropic_to_kiro(request, "conv-123", "arn:aws:test")
 
         print(f"Result: {result}")
         current_content = result["conversationState"]["currentMessage"][
