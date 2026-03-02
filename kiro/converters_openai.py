@@ -293,6 +293,42 @@ def convert_openai_tools_to_unified(tools: Optional[List[Tool]]) -> Optional[Lis
 
 
 # ==================================================================================================
+# Reasoning Effort → Thinking Settings
+# ==================================================================================================
+
+# Map OpenAI reasoning_effort to thinking max tokens
+_REASONING_EFFORT_TO_TOKENS = {
+    "low": 2000,
+    "medium": 4000,
+    "high": 8000,
+}
+
+
+def _resolve_thinking_settings(request_data: ChatCompletionRequest) -> tuple[bool, Optional[int]]:
+    """
+    Resolve thinking injection settings from the OpenAI request.
+
+    Logic:
+    - reasoning_effort is set → enable thinking, map to max tokens
+    - reasoning_effort is not set → disable thinking (default off)
+
+    Returns:
+        Tuple of (inject_thinking, max_thinking_tokens)
+    """
+    from kiro.config import FAKE_REASONING_ENABLED
+
+    if not FAKE_REASONING_ENABLED:
+        return False, None
+
+    effort = getattr(request_data, "reasoning_effort", None)
+    if effort and effort in _REASONING_EFFORT_TO_TOKENS:
+        logger.debug(f"reasoning_effort='{effort}' → thinking enabled, max_tokens={_REASONING_EFFORT_TO_TOKENS[effort]}")
+        return True, _REASONING_EFFORT_TO_TOKENS[effort]
+
+    return False, None
+
+
+# ==================================================================================================
 # Main Entry Point
 # ==================================================================================================
 
@@ -337,6 +373,9 @@ def build_kiro_payload(
         f"system_prompt_length={len(system_prompt)}"
     )
     
+    # Resolve thinking settings from request
+    inject_thinking, thinking_max_tokens = _resolve_thinking_settings(request_data)
+
     # Use core function to build payload
     result = core_build_kiro_payload(
         messages=unified_messages,
@@ -345,7 +384,8 @@ def build_kiro_payload(
         tools=unified_tools,
         conversation_id=conversation_id,
         profile_arn=profile_arn,
-        inject_thinking=True
+        inject_thinking=inject_thinking,
+        thinking_max_tokens=thinking_max_tokens,
     )
-    
+
     return result.payload

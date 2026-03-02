@@ -283,6 +283,12 @@ class AnthropicMessagesRequest(BaseModel):
     stop_sequences: Optional[List[str]] = None
     metadata: Optional[Dict[str, Any]] = None
 
+    # Extended thinking control
+    thinking: Optional[Dict[str, Any]] = None  # {"type": "enabled", "budget_tokens": N} or {"type": "adaptive"}
+
+    # Output configuration (effort control)
+    output_config: Optional[Dict[str, Any]] = None  # {"effort": "low/medium/high/max"}
+
     model_config = {"extra": "allow"}
 
 

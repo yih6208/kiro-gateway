@@ -168,6 +168,9 @@ class ChatCompletionRequest(BaseModel):
     tools: Optional[List[Tool]] = None
     tool_choice: Optional[Union[str, Dict]] = None
     
+    # Reasoning / thinking control
+    reasoning_effort: Optional[str] = None  # "low", "medium", "high"
+
     # Compatibility fields (ignored)
     stream_options: Optional[Dict[str, Any]] = None
     logit_bias: Optional[Dict[str, float]] = None

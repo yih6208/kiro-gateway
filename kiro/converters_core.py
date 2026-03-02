@@ -268,21 +268,24 @@ def extract_images_from_content(content: Any) -> List[Dict[str, Any]]:
 # Thinking Mode Support (Fake Reasoning)
 # ==================================================================================================
 
-def get_thinking_system_prompt_addition() -> str:
+def get_thinking_system_prompt_addition(thinking_enabled: bool = False) -> str:
     """
     Generate system prompt addition that legitimizes thinking tags.
-    
+
     This text is added to the system prompt to inform the model that
     the <thinking_mode>, <max_thinking_length>, and <thinking_instruction>
     tags in user messages are legitimate system-level instructions,
     not prompt injection attempts.
-    
+
+    Args:
+        thinking_enabled: Whether thinking was requested for this specific request
+
     Returns:
-        System prompt addition text (empty string if fake reasoning is disabled)
+        System prompt addition text (empty string if thinking is not enabled)
     """
-    if not FAKE_REASONING_ENABLED:
+    if not thinking_enabled:
         return ""
-    
+
     return (
         "\n\n---\n"
         "# Extended Thinking Mode\n\n"
@@ -325,22 +328,21 @@ def get_truncation_recovery_system_addition() -> str:
     )
 
 
-def inject_thinking_tags(content: str) -> str:
+def inject_thinking_tags(content: str, max_thinking_tokens: Optional[int] = None) -> str:
     """
     Inject fake reasoning tags into content.
-    
-    When FAKE_REASONING_ENABLED is True, this function prepends the special
-    thinking mode tags to the content. These tags instruct the model to
-    include its reasoning process in the response.
-    
+
+    Prepends the special thinking mode tags to the content. These tags
+    instruct the model to include its reasoning process in the response.
+
     Args:
         content: Original content string
-    
+        max_thinking_tokens: Max thinking tokens (uses FAKE_REASONING_MAX_TOKENS if None)
+
     Returns:
-        Content with thinking tags prepended (if enabled) or original content
+        Content with thinking tags prepended
     """
-    if not FAKE_REASONING_ENABLED:
-        return content
+    effective_max_tokens = max_thinking_tokens if max_thinking_tokens is not None else FAKE_REASONING_MAX_TOKENS
     
     # Thinking instruction to improve reasoning quality
     thinking_instruction = (
@@ -357,11 +359,11 @@ def inject_thinking_tags(content: str) -> str:
     
     thinking_prefix = (
         f"<thinking_mode>enabled</thinking_mode>\n"
-        f"<max_thinking_length>{FAKE_REASONING_MAX_TOKENS}</max_thinking_length>\n"
+        f"<max_thinking_length>{effective_max_tokens}</max_thinking_length>\n"
         f"<thinking_instruction>{thinking_instruction}</thinking_instruction>\n\n"
     )
     
-    logger.debug(f"Injecting fake reasoning tags with max_tokens={FAKE_REASONING_MAX_TOKENS}")
+    logger.debug(f"Injecting fake reasoning tags with max_tokens={effective_max_tokens}")
     
     return thinking_prefix + content
 
@@ -1344,14 +1346,15 @@ def build_kiro_payload(
     tools: Optional[List[UnifiedTool]],
     conversation_id: str,
     profile_arn: str,
-    inject_thinking: bool = True
+    inject_thinking: bool = False,
+    thinking_max_tokens: Optional[int] = None,
 ) -> KiroPayloadResult:
     """
     Builds complete payload for Kiro API from unified data.
-    
+
     This is the main function that assembles the Kiro API payload from
     API-agnostic unified message and tool formats.
-    
+
     Args:
         messages: List of messages in unified format (without system messages)
         system_prompt: Already extracted system prompt
@@ -1359,11 +1362,12 @@ def build_kiro_payload(
         tools: List of tools in unified format (or None)
         conversation_id: Unique conversation ID
         profile_arn: AWS CodeWhisperer profile ARN
-        inject_thinking: Whether to inject thinking tags (default True)
-    
+        inject_thinking: Whether to inject thinking tags for this request
+        thinking_max_tokens: Max thinking tokens override (uses FAKE_REASONING_MAX_TOKENS if None)
+
     Returns:
         KiroPayloadResult with payload and tool documentation
-    
+
     Raises:
         ValueError: If there are no messages to send
     """
@@ -1378,8 +1382,8 @@ def build_kiro_payload(
     if tool_documentation:
         full_system_prompt = full_system_prompt + tool_documentation if full_system_prompt else tool_documentation.strip()
     
-    # Add thinking mode legitimization to system prompt if enabled
-    thinking_system_addition = get_thinking_system_prompt_addition()
+    # Add thinking mode legitimization to system prompt if enabled for this request
+    thinking_system_addition = get_thinking_system_prompt_addition(inject_thinking)
     if thinking_system_addition:
         full_system_prompt = full_system_prompt + thinking_system_addition if full_system_prompt else thinking_system_addition.strip()
     
@@ -1481,9 +1485,9 @@ def build_kiro_payload(
         if tool_results:
             user_input_context["toolResults"] = tool_results
     
-    # Inject thinking tags if enabled (only for the current/last user message)
+    # Inject thinking tags if enabled for this request (only for the current/last user message)
     if inject_thinking and current_message.role == "user":
-        current_content = inject_thinking_tags(current_content)
+        current_content = inject_thinking_tags(current_content, thinking_max_tokens)
     
     # Build userInputMessage
     user_input_message = {

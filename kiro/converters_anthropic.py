@@ -419,6 +419,61 @@ def convert_anthropic_tools(
     return (unified_tools if unified_tools else None), has_server_side_tools
 
 
+# Map Anthropic effort levels to thinking max tokens
+_EFFORT_TO_TOKENS = {
+    "low": 2000,
+    "medium": 4000,
+    "high": 8000,
+    "max": 16000,
+}
+
+
+def _resolve_thinking_settings(request: AnthropicMessagesRequest) -> tuple[bool, Optional[int]]:
+    """
+    Resolve thinking injection settings from the Anthropic request.
+
+    Logic:
+    - thinking.type == "enabled" with budget_tokens → enable, use budget_tokens
+    - thinking.type == "adaptive" → enable, use effort from output_config to determine tokens
+    - thinking.type == "disabled" or not set → disable (default off)
+    - output_config.effort maps to token budgets: low=2000, medium=4000, high=8000, max=16000
+
+    Returns:
+        Tuple of (inject_thinking, max_thinking_tokens)
+    """
+    from kiro.config import FAKE_REASONING_ENABLED
+
+    if not FAKE_REASONING_ENABLED:
+        return False, None
+
+    thinking = getattr(request, "thinking", None)
+    if not thinking or not isinstance(thinking, dict):
+        return False, None
+
+    thinking_type = thinking.get("type")
+    budget = thinking.get("budget_tokens")
+
+    # Extract effort from output_config
+    output_config = getattr(request, "output_config", None)
+    effort = output_config.get("effort") if isinstance(output_config, dict) else None
+
+    logger.debug(f"Raw thinking parameter: type={thinking_type}, budget_tokens={budget}, effort={effort}, full={thinking}")
+
+    if thinking_type == "enabled":
+        # Explicit budget takes priority, then effort, then server default
+        effective_budget = budget or _EFFORT_TO_TOKENS.get(effort) if effort else budget
+        logger.debug(f"thinking.type='enabled', budget_tokens={effective_budget} → thinking enabled")
+        return True, effective_budget
+
+    if thinking_type == "adaptive":
+        # Effort determines token budget for adaptive mode, default to "high" if not specified
+        effective_budget = _EFFORT_TO_TOKENS.get(effort, _EFFORT_TO_TOKENS["high"]) if effort else budget or _EFFORT_TO_TOKENS["high"]
+        logger.debug(f"thinking.type='adaptive', effort={effort}, budget_tokens={effective_budget} → thinking enabled")
+        return True, effective_budget
+
+    return False, None
+
+
 def anthropic_to_kiro(
     request: AnthropicMessagesRequest, conversation_id: str, profile_arn: str
 ) -> tuple[dict, bool]:
@@ -469,6 +524,9 @@ def anthropic_to_kiro(
         f"system_prompt_length={len(system_prompt)}, server_side_tools={has_server_side_tools}"
     )
 
+    # Resolve thinking settings from request
+    inject_thinking, thinking_max_tokens = _resolve_thinking_settings(request)
+
     # Use core function to build payload
     result = build_kiro_payload(
         messages=unified_messages,
@@ -477,7 +535,8 @@ def anthropic_to_kiro(
         tools=unified_tools,
         conversation_id=conversation_id,
         profile_arn=profile_arn,
-        inject_thinking=True,
+        inject_thinking=inject_thinking,
+        thinking_max_tokens=thinking_max_tokens,
     )
 
     return result.payload, has_server_side_tools

@@ -180,6 +180,7 @@ async def messages(
         HTTPException: On validation or API errors
     """
     logger.info(f"Request to /v1/messages (model={request_data.model}, stream={request_data.stream}, api_key={key_metadata['key_id']})")
+    # logger.debug(f"Raw Anthropic request body: {request_data.model_dump_json(exclude_none=True)}")
 
     if anthropic_version:
         logger.debug(f"Anthropic-Version header: {anthropic_version}")
