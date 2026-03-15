@@ -51,6 +51,17 @@
         {% block content %}{% endblock %}
     </main>
 
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.utc-time').forEach(function(el) {
+            const raw = el.textContent.trim();
+            if (!raw || raw === 'Never') return;
+            const d = new Date(raw.replace(' ', 'T') + 'Z');
+            if (isNaN(d)) return;
+            el.textContent = d.toLocaleString(undefined, { hour12: false });
+        });
+    });
+    </script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

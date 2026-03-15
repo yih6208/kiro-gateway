@@ -104,7 +104,7 @@
                         {% endif %}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {{ account.last_success_at or 'Never' }}
+                        <span class="utc-time">{{ account.last_success_at or 'Never' }}</span>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                         <form action="/admin/kiro-accounts/{{ account.id }}/toggle" method="POST" class="inline">

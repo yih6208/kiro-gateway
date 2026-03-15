@@ -79,21 +79,26 @@ class KiroHttpClient:
     def __init__(
         self,
         auth_manager: KiroAuthManager,
-        shared_client: Optional[httpx.AsyncClient] = None
+        shared_client: Optional[httpx.AsyncClient] = None,
+        account_pool=None
     ):
         """
         Initializes the HTTP client.
-        
+
         Args:
             auth_manager: Authentication manager
             shared_client: Optional shared httpx.AsyncClient for connection pooling.
                           If provided, this client will be used instead of creating
                           a new one. The shared client will NOT be closed by close().
+            account_pool: Optional AccountPool for failover on 429. When provided,
+                         429 errors will switch to the next account instead of
+                         retrying the same one.
         """
         self.auth_manager = auth_manager
         self._shared_client = shared_client
         self._owns_client = shared_client is None
         self.client: Optional[httpx.AsyncClient] = shared_client
+        self._account_pool = account_pool
     
     async def _get_client(self, stream: bool = False) -> httpx.AsyncClient:
         """
@@ -241,15 +246,38 @@ class KiroHttpClient:
                     await self.auth_manager.force_refresh()
                     continue
 
-                # 429 - rate limit, notify rate limiter and wait
+                # 429 - rate limit, try next account or backoff
                 if response.status_code == 429:
                     # Trigger global backoff (if enabled)
                     if rate_limiter and rate_limiter.is_enabled():
                         await rate_limiter.on_429_received()
 
-                    delay = BASE_RETRY_DELAY * (2 ** attempt)
-                    logger.warning(f"Received 429, waiting {delay}s (attempt {attempt + 1}/{MAX_RETRIES})")
-                    await asyncio.sleep(delay)
+                    if self._account_pool:
+                        # Failover: switch to next account via round-robin
+                        try:
+                            new_account_id, new_auth_manager = await self._account_pool.get_account()
+                            old_host = self.auth_manager.api_host
+                            self.auth_manager = new_auth_manager
+                            new_host = new_auth_manager.api_host
+                            # Update URL if the new account uses a different API host
+                            if old_host != new_host:
+                                url = url.replace(old_host, new_host)
+                            logger.warning(
+                                f"Received 429, switching to account {new_account_id} "
+                                f"(attempt {attempt + 1}/{max_retries})"
+                            )
+                        except Exception as e:
+                            # Pool exhausted or error — fall back to backoff
+                            delay = BASE_RETRY_DELAY * (2 ** attempt)
+                            logger.warning(
+                                f"Received 429, account failover failed ({e}), "
+                                f"waiting {delay}s (attempt {attempt + 1}/{max_retries})"
+                            )
+                            await asyncio.sleep(delay)
+                    else:
+                        delay = BASE_RETRY_DELAY * (2 ** attempt)
+                        logger.warning(f"Received 429, waiting {delay}s (attempt {attempt + 1}/{max_retries})")
+                        await asyncio.sleep(delay)
                     continue
 
                 # 5xx - server error, wait and retry

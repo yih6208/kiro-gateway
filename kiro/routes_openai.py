@@ -306,11 +306,11 @@ async def chat_completions(
     if request_data.stream:
         # Streaming mode: per-request client prevents orphaned connections
         # when network interface changes (VPN disconnect/reconnect)
-        http_client = KiroHttpClient(auth_manager, shared_client=None)
+        http_client = KiroHttpClient(auth_manager, shared_client=None, account_pool=account_pool)
     else:
         # Non-streaming mode: shared client for efficient connection reuse
         shared_client = request.app.state.http_client
-        http_client = KiroHttpClient(auth_manager, shared_client=shared_client)
+        http_client = KiroHttpClient(auth_manager, shared_client=shared_client, account_pool=account_pool)
     try:
         # Make request to Kiro API (for both streaming and non-streaming modes)
         # Important: we wait for Kiro response BEFORE returning StreamingResponse,
