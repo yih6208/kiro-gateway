@@ -348,7 +348,7 @@ class UsageTracker:
             ).group_by(
                 UsageRecord.model, hour_expr
             ).order_by(
-                UsageRecord.model, hour_expr
+                hour_expr, UsageRecord.model
             )
 
             result = await session.execute(stmt)

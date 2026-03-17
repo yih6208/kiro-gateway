@@ -130,7 +130,7 @@
             <h3 class="text-lg font-medium text-gray-900">Hourly Breakdown &mdash; {{ selected_date }}</h3>
         </div>
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
+            <table id="hourlyTable" class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50">
                     <tr>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hour</th>
@@ -246,11 +246,30 @@ const COLORS = [
     '#0891B2', '#DB2777', '#65A30D', '#EA580C', '#4338CA'
 ];
 
-// Convert table hour cells to local time
-document.querySelectorAll('.utc-hour').forEach(el => {
-    const utcH = parseInt(el.dataset.utcHour, 10);
-    el.textContent = formatLocalHour(utcH);
-});
+// Convert table hour cells to local time and sort rows by local hour
+(function() {
+    const tbody = document.querySelector('#hourlyTable tbody');
+    if (!tbody) return;
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    rows.forEach(row => {
+        const cell = row.querySelector('.utc-hour');
+        if (cell) {
+            const utcH = parseInt(cell.dataset.utcHour, 10);
+            cell.textContent = formatLocalHour(utcH);
+            cell.dataset.localHour = utcToLocalHour(utcH);
+        }
+    });
+    // Sort by local hour, then by model name
+    rows.sort((a, b) => {
+        const ha = parseInt(a.querySelector('.utc-hour').dataset.localHour, 10);
+        const hb = parseInt(b.querySelector('.utc-hour').dataset.localHour, 10);
+        if (ha !== hb) return ha - hb;
+        const ma = a.querySelector('td:nth-child(2)').textContent;
+        const mb = b.querySelector('td:nth-child(2)').textContent;
+        return ma.localeCompare(mb);
+    });
+    rows.forEach(row => tbody.appendChild(row));
+})();
 
 {% set has_throughput = hourly_throughput | selectattr('avg_tokens_per_second', 'gt', 0) | list | length > 0 %}
 {% if has_throughput %}
