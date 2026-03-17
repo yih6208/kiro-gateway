@@ -1,0 +1,354 @@
+{% extends "admin/base.html" %}
+{% block title %}Daily Status - Kiro Gateway Admin{% endblock %}
+
+{% block content %}
+<div class="px-4 py-6 sm:px-0">
+
+    <!-- Header with date navigation -->
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-bold text-gray-900">Daily Status</h1>
+        <div class="flex items-center space-x-3">
+            <a href="/admin/daily-status?date={{ prev_date }}"
+               class="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+                &larr; Prev
+            </a>
+            <input type="date" id="datePicker" value="{{ selected_date }}"
+                   onchange="window.location='/admin/daily-status?date='+this.value"
+                   class="px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500">
+            <a href="/admin/daily-status?date={{ next_date }}"
+               class="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 {% if is_today %}pointer-events-none opacity-50{% endif %}">
+                Next &rarr;
+            </a>
+            <a href="/admin/daily-status"
+               class="px-3 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700">
+                Today
+            </a>
+        </div>
+    </div>
+
+    {% if daily_summary.total_requests > 0 %}
+
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-6">
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <svg class="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5" />
+                        </svg>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 truncate">Total Requests</dt>
+                            <dd class="text-lg font-semibold text-gray-900">{{ "{:,}".format(daily_summary.total_requests) }}</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <svg class="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 14.25v2.25m3-4.5v4.5m3-6.75v6.75m3-9v9M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z" />
+                        </svg>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 truncate">Total Tokens</dt>
+                            <dd class="text-lg font-semibold text-gray-900">{{ "{:,}".format(daily_summary.total_tokens) }}</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <svg class="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                        </svg>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 truncate">Models Used</dt>
+                            <dd class="text-lg font-semibold text-gray-900">{{ daily_summary.unique_models }}</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <svg class="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 truncate">Avg Duration</dt>
+                            <dd class="text-lg font-semibold text-gray-900">
+                                {% if daily_summary.avg_duration_ms > 0 %}
+                                {{ "%.1f"|format(daily_summary.avg_duration_ms / 1000) }}s
+                                {% else %}
+                                N/A
+                                {% endif %}
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hourly Token/s Chart (only if we have throughput data with duration) -->
+    {% set has_throughput = hourly_throughput | selectattr('avg_tokens_per_second', 'gt', 0) | list | length > 0 %}
+    {% if has_throughput %}
+    <div class="bg-white shadow rounded-lg mb-6 p-6">
+        <h3 class="text-lg font-medium text-gray-900 mb-4">Hourly Token Throughput (tok/s) &mdash; {{ selected_date }}</h3>
+        <canvas id="hourlyChart" height="100"></canvas>
+    </div>
+    {% endif %}
+
+    <!-- Daily Token Traffic Chart (last 7 days) -->
+    {% if daily_chart_days %}
+    <div class="bg-white shadow rounded-lg mb-6 p-6">
+        <h3 class="text-lg font-medium text-gray-900 mb-4">Daily Token Traffic (Last 7 Days)</h3>
+        <canvas id="dailyChart" height="100"></canvas>
+    </div>
+    {% endif %}
+
+    <!-- Hourly Breakdown Table -->
+    {% if hourly_throughput %}
+    <div class="bg-white shadow rounded-lg mb-6">
+        <div class="px-4 py-5 sm:px-6">
+            <h3 class="text-lg font-medium text-gray-900">Hourly Breakdown &mdash; {{ selected_date }}</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hour</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Model</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Requests</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Input Tokens</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Output Tokens</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Total Tokens</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Tok/s</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for row in hourly_throughput %}
+                    <tr>
+                        <td class="px-6 py-3 whitespace-nowrap text-sm text-gray-900 utc-hour" data-utc-hour="{{ row.hour }}">{{ "%02d:00"|format(row.hour) }}</td>
+                        <td class="px-6 py-3 whitespace-nowrap text-sm text-gray-900">{{ row.model }}</td>
+                        <td class="px-6 py-3 whitespace-nowrap text-sm text-gray-500 text-right">{{ "{:,}".format(row.request_count) }}</td>
+                        <td class="px-6 py-3 whitespace-nowrap text-sm text-gray-500 text-right">{{ "{:,}".format(row.total_input_tokens) }}</td>
+                        <td class="px-6 py-3 whitespace-nowrap text-sm text-gray-500 text-right">{{ "{:,}".format(row.total_output_tokens) }}</td>
+                        <td class="px-6 py-3 whitespace-nowrap text-sm text-gray-500 text-right">{{ "{:,}".format(row.total_tokens) }}</td>
+                        <td class="px-6 py-3 whitespace-nowrap text-sm font-medium text-right
+                            {% if row.avg_tokens_per_second > 0 %}
+                                {% if row.avg_tokens_per_second >= 100 %}text-green-600
+                                {% elif row.avg_tokens_per_second >= 50 %}text-yellow-600
+                                {% else %}text-orange-600{% endif %}
+                            {% else %}text-gray-400{% endif %}">
+                            {% if row.avg_tokens_per_second > 0 %}
+                            {{ "%.1f"|format(row.avg_tokens_per_second) }}
+                            {% else %}
+                            N/A
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Model Traffic Table (selected date) -->
+    {% if today_traffic %}
+    <div class="bg-white shadow rounded-lg">
+        <div class="px-4 py-5 sm:px-6">
+            <h3 class="text-lg font-medium text-gray-900">Model Traffic &mdash; {{ selected_date }}</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Model</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Requests</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Input Tokens</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Output Tokens</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Total Tokens</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Est. Cost</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for row in today_traffic %}
+                    <tr>
+                        <td class="px-6 py-3 whitespace-nowrap text-sm font-medium text-gray-900">{{ row.model }}</td>
+                        <td class="px-6 py-3 whitespace-nowrap text-sm text-gray-500 text-right">{{ "{:,}".format(row.request_count) }}</td>
+                        <td class="px-6 py-3 whitespace-nowrap text-sm text-gray-500 text-right">{{ "{:,}".format(row.input_tokens) }}</td>
+                        <td class="px-6 py-3 whitespace-nowrap text-sm text-gray-500 text-right">{{ "{:,}".format(row.output_tokens) }}</td>
+                        <td class="px-6 py-3 whitespace-nowrap text-sm text-gray-500 text-right">{{ "{:,}".format(row.total_tokens) }}</td>
+                        <td class="px-6 py-3 whitespace-nowrap text-sm text-gray-500 text-right">
+                            {% if row.estimated_cost is not none %}
+                            ${{ "%.4f"|format(row.estimated_cost) }}
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    {% else %}
+    <!-- Empty state -->
+    <div class="bg-white shadow rounded-lg p-12 text-center">
+        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5" />
+        </svg>
+        <h3 class="mt-2 text-sm font-medium text-gray-900">No data for {{ selected_date }}</h3>
+        <p class="mt-1 text-sm text-gray-500">There are no usage records for this date.</p>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+{% if daily_summary.total_requests > 0 %}
+// Timezone offset: convert UTC hour to local hour
+const TZ_OFFSET_HOURS = -(new Date().getTimezoneOffset() / 60);
+function utcToLocalHour(utcHour) {
+    return ((utcHour + TZ_OFFSET_HOURS) % 24 + 24) % 24;
+}
+function formatLocalHour(utcHour) {
+    const local = utcToLocalHour(utcHour);
+    return String(local).padStart(2, '0') + ':00';
+}
+
+// Color palette for models
+const COLORS = [
+    '#4F46E5', '#059669', '#D97706', '#DC2626', '#7C3AED',
+    '#0891B2', '#DB2777', '#65A30D', '#EA580C', '#4338CA'
+];
+
+// Convert table hour cells to local time
+document.querySelectorAll('.utc-hour').forEach(el => {
+    const utcH = parseInt(el.dataset.utcHour, 10);
+    el.textContent = formatLocalHour(utcH);
+});
+
+{% set has_throughput = hourly_throughput | selectattr('avg_tokens_per_second', 'gt', 0) | list | length > 0 %}
+{% if has_throughput %}
+// Hourly Token/s Line Chart
+(function() {
+    const ctx = document.getElementById('hourlyChart').getContext('2d');
+    // Build labels in local timezone order
+    const localLabels = Array.from({length: 24}, (_, i) => {
+        const localH = utcToLocalHour(i);
+        return String(localH).padStart(2, '0') + ':00';
+    });
+    // Re-order data: index i = UTC hour i, but we want to display in local order
+    // Sort by local hour
+    const utcHours = Array.from({length: 24}, (_, i) => i);
+    utcHours.sort((a, b) => utcToLocalHour(a) - utcToLocalHour(b));
+    const sortedLabels = utcHours.map(h => String(utcToLocalHour(h)).padStart(2, '0') + ':00');
+
+    const models = {{ hourly_models | tojson }};
+    const chartData = {{ hourly_chart_data | tojson }};
+
+    const datasets = models.map((model, idx) => ({
+        label: model,
+        data: utcHours.map(h => chartData[model][String(h)] || 0),
+        borderColor: COLORS[idx % COLORS.length],
+        backgroundColor: COLORS[idx % COLORS.length] + '20',
+        tension: 0.3,
+        fill: false,
+        pointRadius: 3,
+        borderWidth: 2,
+    }));
+
+    new Chart(ctx, {
+        type: 'line',
+        data: { labels: sortedLabels, datasets },
+        options: {
+            responsive: true,
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+                y: {
+                    title: { display: true, text: 'Tokens/s' },
+                    beginAtZero: true,
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)} tok/s`
+                    }
+                }
+            }
+        }
+    });
+})();
+{% endif %}
+
+{% if daily_chart_days %}
+// Daily Token Traffic Bar Chart
+(function() {
+    const ctx = document.getElementById('dailyChart').getContext('2d');
+    const labels = {{ daily_chart_days | tojson }};
+    const models = {{ daily_chart_models | tojson }};
+    const chartData = {{ daily_chart_data | tojson }};
+
+    const datasets = models.map((model, idx) => ({
+        label: model,
+        data: labels.map(day => chartData[model][day] || 0),
+        backgroundColor: COLORS[idx % COLORS.length] + 'CC',
+        borderColor: COLORS[idx % COLORS.length],
+        borderWidth: 1,
+    }));
+
+    new Chart(ctx, {
+        type: 'bar',
+        data: { labels, datasets },
+        options: {
+            responsive: true,
+            scales: {
+                x: { stacked: true },
+                y: {
+                    stacked: true,
+                    title: { display: true, text: 'Total Tokens' },
+                    beginAtZero: true,
+                    ticks: {
+                        callback: (v) => v >= 1000000 ? (v/1000000).toFixed(1)+'M' : v >= 1000 ? (v/1000).toFixed(0)+'K' : v
+                    }
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString()} tokens`
+                    }
+                }
+            }
+        }
+    });
+})();
+{% endif %}
+{% endif %}
+</script>
+{% endblock %}

@@ -3,11 +3,12 @@ Usage tracker for recording and analyzing API usage.
 """
 
 import asyncio
-from datetime import datetime
+from datetime import date as date_type
+from datetime import datetime, timedelta
 from typing import Optional
 
 from loguru import logger
-from sqlalchemy import case, func, select
+from sqlalchemy import Integer, case, func, select
 
 from kiro.database import Database, UsageRecord
 
@@ -315,3 +316,149 @@ class UsageTracker:
                 }
                 for record in records
             ]
+
+    async def get_hourly_throughput_by_model(
+        self,
+        target_date: date_type,
+    ) -> list[dict]:
+        """
+        Get average token/s per hour per model for a given date.
+
+        Only includes successful requests (2xx) with non-zero duration and output tokens.
+        token/s = SUM(output_tokens) / (SUM(request_duration_ms) / 1000.0)
+        """
+        day_start = datetime(target_date.year, target_date.month, target_date.day)
+        day_end = day_start + timedelta(days=1)
+
+        async with self.db.SessionLocal() as session:
+            hour_expr = func.cast(func.strftime('%H', UsageRecord.timestamp), Integer)
+
+            stmt = select(
+                UsageRecord.model,
+                hour_expr.label("hour"),
+                func.count(UsageRecord.id).label("request_count"),
+                func.sum(UsageRecord.input_tokens).label("total_input_tokens"),
+                func.sum(UsageRecord.output_tokens).label("total_output_tokens"),
+                func.sum(UsageRecord.total_tokens).label("total_tokens"),
+                func.sum(UsageRecord.request_duration_ms).label("total_duration_ms"),
+            ).where(
+                UsageRecord.timestamp >= day_start,
+                UsageRecord.timestamp < day_end,
+                UsageRecord.status_code.between(200, 299),
+            ).group_by(
+                UsageRecord.model, hour_expr
+            ).order_by(
+                UsageRecord.model, hour_expr
+            )
+
+            result = await session.execute(stmt)
+            rows = result.all()
+
+            return [
+                {
+                    "model": row.model,
+                    "hour": row.hour,
+                    "request_count": row.request_count,
+                    "total_input_tokens": row.total_input_tokens or 0,
+                    "total_output_tokens": row.total_output_tokens or 0,
+                    "total_tokens": row.total_tokens or 0,
+                    "total_duration_ms": row.total_duration_ms or 0,
+                    "avg_tokens_per_second": round(
+                        (row.total_output_tokens / (row.total_duration_ms / 1000.0))
+                        if row.total_duration_ms and row.total_duration_ms > 0
+                        else 0.0,
+                        2,
+                    ),
+                }
+                for row in rows
+            ]
+
+    async def get_daily_token_traffic(
+        self,
+        start_date: date_type,
+        end_date: date_type,
+    ) -> list[dict]:
+        """
+        Get daily input/output token totals per model for a date range (inclusive).
+        """
+        dt_start = datetime(start_date.year, start_date.month, start_date.day)
+        dt_end = datetime(end_date.year, end_date.month, end_date.day) + timedelta(days=1)
+
+        async with self.db.SessionLocal() as session:
+            day_expr = func.date(UsageRecord.timestamp)
+
+            stmt = select(
+                UsageRecord.model,
+                day_expr.label("day"),
+                func.count(UsageRecord.id).label("request_count"),
+                func.sum(UsageRecord.input_tokens).label("input_tokens"),
+                func.sum(UsageRecord.output_tokens).label("output_tokens"),
+                func.sum(UsageRecord.total_tokens).label("total_tokens"),
+            ).where(
+                UsageRecord.timestamp >= dt_start,
+                UsageRecord.timestamp < dt_end,
+            ).group_by(
+                UsageRecord.model, day_expr
+            ).order_by(
+                day_expr, UsageRecord.model
+            )
+
+            result = await session.execute(stmt)
+            rows = result.all()
+
+            return [
+                {
+                    "model": row.model,
+                    "day": row.day,
+                    "request_count": row.request_count,
+                    "input_tokens": row.input_tokens or 0,
+                    "output_tokens": row.output_tokens or 0,
+                    "total_tokens": row.total_tokens or 0,
+                }
+                for row in rows
+            ]
+
+    async def get_daily_summary(
+        self,
+        target_date: date_type,
+    ) -> dict:
+        """
+        Get aggregate statistics for a single day.
+        """
+        day_start = datetime(target_date.year, target_date.month, target_date.day)
+        day_end = day_start + timedelta(days=1)
+
+        async with self.db.SessionLocal() as session:
+            stmt = select(
+                func.count(UsageRecord.id).label("total_requests"),
+                func.sum(UsageRecord.input_tokens).label("total_input_tokens"),
+                func.sum(UsageRecord.output_tokens).label("total_output_tokens"),
+                func.sum(UsageRecord.total_tokens).label("total_tokens"),
+                func.avg(UsageRecord.request_duration_ms).label("avg_duration_ms"),
+                func.count(func.distinct(UsageRecord.model)).label("unique_models"),
+                func.sum(case(
+                    (UsageRecord.status_code.between(200, 299), 1),
+                    else_=0
+                )).label("success_count"),
+                func.sum(case(
+                    (UsageRecord.status_code >= 400, 1),
+                    else_=0
+                )).label("fail_count"),
+            ).where(
+                UsageRecord.timestamp >= day_start,
+                UsageRecord.timestamp < day_end,
+            )
+
+            result = await session.execute(stmt)
+            row = result.one()
+
+            return {
+                "total_requests": row.total_requests or 0,
+                "total_input_tokens": row.total_input_tokens or 0,
+                "total_output_tokens": row.total_output_tokens or 0,
+                "total_tokens": row.total_tokens or 0,
+                "avg_duration_ms": float(row.avg_duration_ms) if row.avg_duration_ms else 0.0,
+                "unique_models": row.unique_models or 0,
+                "success_count": row.success_count or 0,
+                "fail_count": row.fail_count or 0,
+            }

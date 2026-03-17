@@ -557,3 +557,83 @@ async def usage_page(request: Request, admin: dict = Depends(verify_admin_sessio
             "recent_requests": recent_requests,
         },
     )
+
+
+# ==================================================================================================
+# Daily Status
+# ==================================================================================================
+
+
+@router.get("/daily-status", response_class=HTMLResponse)
+async def daily_status_page(
+    request: Request,
+    date: Optional[str] = None,
+    admin: dict = Depends(verify_admin_session),
+):
+    """Display daily status page with per-model token throughput."""
+    usage_tracker = request.app.state.usage_tracker
+
+    # Parse date or default to today (UTC)
+    if date:
+        try:
+            selected_date = datetime.strptime(date, "%Y-%m-%d").date()
+        except ValueError:
+            selected_date = datetime.utcnow().date()
+    else:
+        selected_date = datetime.utcnow().date()
+
+    prev_date = (selected_date - timedelta(days=1)).isoformat()
+    next_date = (selected_date + timedelta(days=1)).isoformat()
+    is_today = selected_date >= datetime.utcnow().date()
+
+    # Fetch data
+    daily_summary = await usage_tracker.get_daily_summary(selected_date)
+    hourly_throughput = await usage_tracker.get_hourly_throughput_by_model(selected_date)
+
+    # Last 7 days of daily traffic for the bar chart
+    week_start = selected_date - timedelta(days=6)
+    daily_traffic = await usage_tracker.get_daily_token_traffic(week_start, selected_date)
+
+    # Reshape hourly data for Chart.js: { model: { 0: val, 1: val, ... } }
+    hourly_models = sorted(set(row["model"] for row in hourly_throughput))
+    hourly_chart_data = {}
+    for model in hourly_models:
+        hourly_chart_data[model] = {h: 0.0 for h in range(24)}
+    for row in hourly_throughput:
+        hourly_chart_data[row["model"]][row["hour"]] = row["avg_tokens_per_second"]
+
+    # Reshape daily traffic for Chart.js
+    daily_chart_models = sorted(set(row["model"] for row in daily_traffic))
+    daily_chart_days = sorted(set(row["day"] for row in daily_traffic))
+    daily_chart_data = {}
+    for model in daily_chart_models:
+        daily_chart_data[model] = {d: 0 for d in daily_chart_days}
+    for row in daily_traffic:
+        daily_chart_data[row["model"]][row["day"]] = row["total_tokens"]
+
+    # Filter today's traffic for the model table and calculate costs
+    today_traffic = [r for r in daily_traffic if r["day"] == selected_date.isoformat()]
+    for row in today_traffic:
+        cost = calculate_cost(row["model"], row["input_tokens"], row["output_tokens"])
+        row["estimated_cost"] = cost["total_cost"]
+
+    return templates.TemplateResponse(
+        "admin/daily_status.html",
+        {
+            "request": request,
+            "admin": admin,
+            "selected_date": selected_date.isoformat(),
+            "prev_date": prev_date,
+            "next_date": next_date,
+            "is_today": is_today,
+            "daily_summary": daily_summary,
+            "hourly_throughput": hourly_throughput,
+            "hourly_chart_data": hourly_chart_data,
+            "hourly_models": hourly_models,
+            "daily_traffic": daily_traffic,
+            "daily_chart_data": daily_chart_data,
+            "daily_chart_models": daily_chart_models,
+            "daily_chart_days": daily_chart_days,
+            "today_traffic": today_traffic,
+        },
+    )

@@ -182,6 +182,7 @@ async def stream_kiro_to_anthropic(
         FirstTokenTimeoutError: If first token not received within timeout
     """
     message_id = generate_message_id()
+    stream_start_time = time.time()
     input_tokens = 0
     output_tokens = 0
     full_content = ""
@@ -553,7 +554,7 @@ async def stream_kiro_to_anthropic(
                     input_tokens=input_tokens,
                     output_tokens=output_tokens,
                     status_code=200,
-                    duration_ms=0
+                    duration_ms=int((time.time() - stream_start_time) * 1000)
                 )
                 await usage_tracker.flush()  # Flush immediately for real-time updates
                 logger.debug(f"Recorded usage: {input_tokens + output_tokens} tokens for API key {api_key_id}")
@@ -577,7 +578,7 @@ async def stream_kiro_to_anthropic(
                     api_key_id=api_key_id, kiro_account_id=kiro_account_id,
                     model=model, endpoint="/v1/messages",
                     input_tokens=input_tokens, output_tokens=output_tokens,
-                    status_code=500, duration_ms=0)
+                    status_code=500, duration_ms=int((time.time() - stream_start_time) * 1000))
                 await usage_tracker.flush()
             except Exception:
                 pass
@@ -629,7 +630,8 @@ async def collect_anthropic_response(
         Dictionary with full response in Anthropic Messages format
     """
     message_id = generate_message_id()
-    
+    collect_start_time = time.time()
+
     # Count input tokens
     input_tokens = 0
     if request_messages:
@@ -708,7 +710,7 @@ async def collect_anthropic_response(
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
                 status_code=200,
-                duration_ms=0
+                duration_ms=int((time.time() - collect_start_time) * 1000)
             )
             await usage_tracker.flush()  # Flush immediately for real-time updates
             logger.debug(f"Recorded usage: {input_tokens + output_tokens} tokens for API key {api_key_id}")

@@ -121,6 +121,7 @@ async def stream_kiro_to_openai_internal(
     """
     completion_id = generate_completion_id()
     created_time = int(time.time())
+    stream_start_time = time.time()
     first_chunk = True
     
     metering_data = None
@@ -358,7 +359,7 @@ async def stream_kiro_to_openai_internal(
                     input_tokens=prompt_tokens,
                     output_tokens=completion_tokens,
                     status_code=200,
-                    duration_ms=0
+                    duration_ms=int((time.time() - stream_start_time) * 1000)
                 )
                 await usage_tracker.flush()  # Flush immediately for real-time updates
                 logger.debug(f"Recorded usage: {total_tokens} tokens for API key {api_key_id}")
@@ -391,7 +392,7 @@ async def stream_kiro_to_openai_internal(
                     api_key_id=api_key_id, kiro_account_id=kiro_account_id,
                     model=model, endpoint="/v1/chat/completions",
                     input_tokens=prompt_tokens, output_tokens=completion_tokens,
-                    status_code=500, duration_ms=0)
+                    status_code=500, duration_ms=int((time.time() - stream_start_time) * 1000))
                 await usage_tracker.flush()
             except Exception:
                 pass
