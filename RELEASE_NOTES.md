@@ -2,7 +2,7 @@
 
 ## v2.5.0 (2026-03-17)
 
-**Git Commit:** `119a27b`
+**Git Commit:** `c4eee83`
 **Docker Image:** `ghcr.io/yih6208/kiro-gateway:multi-account`
 
 ### Changes
@@ -25,6 +25,12 @@
   - Admin timestamps converted to local time
 
 #### Bug Fixes
+- **Fix output token counting** (`c4eee83`)
+  - Output tokens now include tool call function names and arguments
+  - Previously only counted text content + thinking content, missing all tool call data
+  - Significantly underreported output tokens for Claude Code usage (mostly tool calls)
+  - Affects both OpenAI and Anthropic streaming/non-streaming paths
+
 - **Fix request duration tracking** (`119a27b`)
   - `duration_ms` was hardcoded to 0 in all streaming `record_request` calls
   - Now records actual request duration using `time.time()` in both OpenAI and Anthropic streaming paths
@@ -317,7 +323,7 @@
 
 | Version | Date | Git Commit | Notes |
 |---------|------|------------|-------|
-| 2.5.0 | 2026-03-17 | `119a27b` | Daily Status page, fix duration_ms tracking |
+| 2.5.0 | 2026-03-17 | `c4eee83` | Daily Status page, fix output token counting, fix duration_ms tracking |
 | 2.4.0 | 2026-03-01 | `cadded9` | Server-side web search, per-request thinking control |
 | 2.3.9 | 2026-02-25 | `2268368` | Usage tracking for failed requests, account pool success reporting |
 | 2.3.8 | 2026-02-18 | `ccef68d` | Auto-upgrade claude-sonnet-4.6 to 1M context |
