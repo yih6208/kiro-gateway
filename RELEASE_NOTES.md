@@ -1,5 +1,37 @@
 # Release Notes
 
+## v2.5.0 (2026-03-17)
+
+**Git Commit:** `119a27b`
+**Docker Image:** `ghcr.io/yih6208/kiro-gateway:multi-account`
+
+### Changes
+
+#### Features
+- **Daily Status page** (`119a27b`)
+  - New `/admin/daily-status` page with per-model hourly token throughput (tok/s) and daily token traffic
+  - Line chart showing hourly tok/s per model with Chart.js
+  - Stacked bar chart showing daily token traffic (last 7 days) per model
+  - Hourly breakdown table with requests, input/output tokens, and tok/s per model
+  - Model traffic table with estimated cost per model
+  - Date picker with prev/next day navigation
+  - Hours automatically displayed in browser local timezone
+
+- **Per-request thinking control** (`6d4fcd5`)
+  - Support thinking control via API parameters per request
+
+- **429 account pool failover** (`3a0fd39`)
+  - Automatic failover to next account when 429 is received
+  - Admin timestamps converted to local time
+
+#### Bug Fixes
+- **Fix request duration tracking** (`119a27b`)
+  - `duration_ms` was hardcoded to 0 in all streaming `record_request` calls
+  - Now records actual request duration using `time.time()` in both OpenAI and Anthropic streaming paths
+  - Affects both success and error recording in streaming and non-streaming modes
+
+---
+
 ## v2.4.0 (2026-03-01)
 
 **Git Commit:** `cadded9`
@@ -285,6 +317,8 @@
 
 | Version | Date | Git Commit | Notes |
 |---------|------|------------|-------|
+| 2.5.0 | 2026-03-17 | `119a27b` | Daily Status page, fix duration_ms tracking |
+| 2.4.0 | 2026-03-01 | `cadded9` | Server-side web search, per-request thinking control |
 | 2.3.9 | 2026-02-25 | `2268368` | Usage tracking for failed requests, account pool success reporting |
 | 2.3.8 | 2026-02-18 | `ccef68d` | Auto-upgrade claude-sonnet-4.6 to 1M context |
 | 2.3.7 | 2026-02-07 | `a392a4a` | Estimated cost display on usage pages |
