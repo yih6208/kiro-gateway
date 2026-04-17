@@ -79,6 +79,18 @@ def set_flash_new_key(request: Request, response: Response, key: str) -> None:
     )
 
 
+def _read_flash_new_key(request: Request) -> Optional[str]:
+    """Read flash new key from cookie without clearing it."""
+    flash_token = request.cookies.get(FLASH_COOKIE_NAME)
+    if not flash_token:
+        return None
+    try:
+        payload = jwt.decode(flash_token, ADMIN_SESSION_SECRET, algorithms=[JWT_ALGORITHM])
+        return payload.get("key")
+    except JWTError:
+        return None
+
+
 def get_and_clear_flash_new_key(request: Request, response: Response) -> Optional[str]:
     """
     Retrieve and immediately clear the flash new key cookie.
@@ -124,20 +136,21 @@ def _is_secure_request(request: Request) -> bool:
     return False
 
 
-def get_or_create_csrf_token(request: Request, response: Response) -> str:
+def get_or_create_csrf_token(request: Request) -> str:
     """Get existing CSRF token from cookie or create a new one."""
-    token = request.cookies.get(CSRF_COOKIE_NAME)
-    if not token:
-        token = secrets.token_urlsafe(32)
-        response.set_cookie(
-            key=CSRF_COOKIE_NAME,
-            value=token,
-            httponly=False,
-            secure=_is_secure_request(request),
-            samesite="lax",
-            max_age=ADMIN_SESSION_EXPIRY_HOURS * 3600,
-        )
-    return token
+    return request.cookies.get(CSRF_COOKIE_NAME) or secrets.token_urlsafe(32)
+
+
+def set_csrf_cookie(request: Request, response: Response, token: str) -> None:
+    """Set CSRF token cookie on the response."""
+    response.set_cookie(
+        key=CSRF_COOKIE_NAME,
+        value=token,
+        httponly=False,
+        secure=_is_secure_request(request),
+        samesite="lax",
+        max_age=ADMIN_SESSION_EXPIRY_HOURS * 3600,
+    )
 
 
 def verify_csrf_token(request: Request, csrf_token: str) -> None:
@@ -188,14 +201,16 @@ async def verify_admin_session(request: Request) -> dict:
 
 
 @router.get("/login", response_class=HTMLResponse)
-async def login_page(request: Request, response: Response):
+async def login_page(request: Request):
     """Display login page."""
-    csrf_token = get_or_create_csrf_token(request, response)
-    return templates.TemplateResponse(
+    csrf_token = get_or_create_csrf_token(request)
+    resp = templates.TemplateResponse(
         name="admin/login.html",
         request=request,
         context={"csrf_token": csrf_token},
     )
+    set_csrf_cookie(request, resp, csrf_token)
+    return resp
 
 
 @router.post("/login")
@@ -276,9 +291,9 @@ async def admin_root(request: Request, admin: dict = Depends(verify_admin_sessio
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
-async def dashboard(request: Request, response: Response, admin: dict = Depends(verify_admin_session)):
+async def dashboard(request: Request, admin: dict = Depends(verify_admin_session)):
     """Display admin dashboard with statistics."""
-    csrf_token = get_or_create_csrf_token(request, response)
+    csrf_token = get_or_create_csrf_token(request)
 
     db = request.app.state.db
     api_key_manager = request.app.state.api_key_manager
@@ -303,11 +318,13 @@ async def dashboard(request: Request, response: Response, admin: dict = Depends(
         "total_tokens": usage_stats["total_tokens"],
     }
 
-    return templates.TemplateResponse(
+    resp = templates.TemplateResponse(
         name="admin/dashboard.html",
         request=request,
         context={"admin": admin, "stats": stats, "csrf_token": csrf_token},
     )
+    set_csrf_cookie(request, resp, csrf_token)
+    return resp
 
 
 # ==================================================================================================
@@ -316,7 +333,7 @@ async def dashboard(request: Request, response: Response, admin: dict = Depends(
 
 
 @router.get("/api-keys", response_class=HTMLResponse)
-async def api_keys_page(request: Request, response: Response, admin: dict = Depends(verify_admin_session)):
+async def api_keys_page(request: Request, admin: dict = Depends(verify_admin_session)):
     """Display API keys management page."""
     api_key_manager = request.app.state.api_key_manager
     keys = await api_key_manager.list_keys()
@@ -331,16 +348,21 @@ async def api_keys_page(request: Request, response: Response, admin: dict = Depe
                 key_total_cost += cost["total_cost"]
         key["estimated_cost"] = key_total_cost
 
-    # Check for newly created key (flash message pattern)
-    new_key = get_and_clear_flash_new_key(request, response)
+    # Read flash key from cookie (before building response)
+    new_key = _read_flash_new_key(request)
+    csrf_token = get_or_create_csrf_token(request)
 
-    csrf_token = get_or_create_csrf_token(request, response)
-
-    return templates.TemplateResponse(
+    resp = templates.TemplateResponse(
         name="admin/api_keys.html",
         request=request,
         context={"admin": admin, "keys": keys, "new_key": new_key, "csrf_token": csrf_token},
     )
+
+    # Clear flash cookie and set CSRF cookie on the actual response
+    if new_key:
+        resp.delete_cookie(FLASH_COOKIE_NAME)
+    set_csrf_cookie(request, resp, csrf_token)
+    return resp
 
 
 @router.post("/api-keys/create")
@@ -461,18 +483,20 @@ async def update_api_key_limits(
 
 
 @router.get("/kiro-accounts", response_class=HTMLResponse)
-async def kiro_accounts_page(request: Request, response: Response, admin: dict = Depends(verify_admin_session)):
+async def kiro_accounts_page(request: Request, admin: dict = Depends(verify_admin_session)):
     """Display Kiro accounts management page."""
-    csrf_token = get_or_create_csrf_token(request, response)
+    csrf_token = get_or_create_csrf_token(request)
 
     account_pool = request.app.state.account_pool
     accounts = await account_pool.list_accounts()
 
-    return templates.TemplateResponse(
+    resp = templates.TemplateResponse(
         name="admin/kiro_accounts.html",
         request=request,
         context={"admin": admin, "accounts": accounts, "csrf_token": csrf_token},
     )
+    set_csrf_cookie(request, resp, csrf_token)
+    return resp
 
 
 @router.get("/kiro-accounts/oauth/start")
@@ -671,9 +695,9 @@ async def public_usage(request: Request, api_key: str):
 
 
 @router.get("/usage", response_class=HTMLResponse)
-async def usage_page(request: Request, response: Response, admin: dict = Depends(verify_admin_session)):
+async def usage_page(request: Request, admin: dict = Depends(verify_admin_session)):
     """Display usage analytics page."""
-    csrf_token = get_or_create_csrf_token(request, response)
+    csrf_token = get_or_create_csrf_token(request)
 
     usage_tracker = request.app.state.usage_tracker
 
@@ -697,7 +721,7 @@ async def usage_page(request: Request, response: Response, admin: dict = Depends
     # Get recent requests
     recent_requests = await usage_tracker.get_recent_requests(limit=50)
 
-    return templates.TemplateResponse(
+    resp = templates.TemplateResponse(
         name="admin/usage.html",
         request=request,
         context={
@@ -710,6 +734,8 @@ async def usage_page(request: Request, response: Response, admin: dict = Depends
             "csrf_token": csrf_token,
         },
     )
+    set_csrf_cookie(request, resp, csrf_token)
+    return resp
 
 
 # ==================================================================================================
@@ -720,12 +746,11 @@ async def usage_page(request: Request, response: Response, admin: dict = Depends
 @router.get("/daily-status", response_class=HTMLResponse)
 async def daily_status_page(
     request: Request,
-    response: Response,
     date: Optional[str] = None,
     admin: dict = Depends(verify_admin_session),
 ):
     """Display daily status page with per-model token throughput."""
-    csrf_token = get_or_create_csrf_token(request, response)
+    csrf_token = get_or_create_csrf_token(request)
 
     usage_tracker = request.app.state.usage_tracker
 
@@ -773,7 +798,7 @@ async def daily_status_page(
         cost = calculate_cost(row["model"], row["input_tokens"], row["output_tokens"])
         row["estimated_cost"] = cost["total_cost"]
 
-    return templates.TemplateResponse(
+    resp = templates.TemplateResponse(
         name="admin/daily_status.html",
         request=request,
         context={
@@ -794,3 +819,5 @@ async def daily_status_page(
             "csrf_token": csrf_token,
         },
     )
+    set_csrf_cookie(request, resp, csrf_token)
+    return resp
