@@ -51,7 +51,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return encoded_jwt
 
 
-def set_flash_new_key(response: Response, key: str) -> None:
+def set_flash_new_key(request: Request, response: Response, key: str) -> None:
     """
     Store new API key in a secure, short-lived cookie (flash message pattern).
 
@@ -59,23 +59,21 @@ def set_flash_new_key(response: Response, key: str) -> None:
     leak into browser history, server logs, and Referer headers.
 
     Args:
+        request: FastAPI Request object (for secure flag detection)
         response: FastAPI Response object
         key: The plaintext API key to store temporarily
     """
-    # Create a short-lived JWT token containing the key
-    # Token expires in 5 minutes - enough time to redirect and display once
     flash_data = {
         "key": key,
         "exp": datetime.utcnow() + timedelta(minutes=5)
     }
     flash_token = jwt.encode(flash_data, ADMIN_SESSION_SECRET, algorithm=JWT_ALGORITHM)
 
-    # Set as HTTP-only secure cookie
     response.set_cookie(
         key=FLASH_COOKIE_NAME,
         value=flash_token,
         httponly=True,
-        secure=True,
+        secure=_is_secure_request(request),
         samesite="lax",
         max_age=300,  # 5 minutes
     )
@@ -117,6 +115,15 @@ def get_and_clear_flash_new_key(request: Request, response: Response) -> Optiona
 CSRF_COOKIE_NAME = "csrf_token"
 
 
+def _is_secure_request(request: Request) -> bool:
+    """Check if request came over HTTPS (directly or via reverse proxy)."""
+    if request.url.scheme == "https":
+        return True
+    if request.headers.get("x-forwarded-proto") == "https":
+        return True
+    return False
+
+
 def get_or_create_csrf_token(request: Request, response: Response) -> str:
     """Get existing CSRF token from cookie or create a new one."""
     token = request.cookies.get(CSRF_COOKIE_NAME)
@@ -125,8 +132,8 @@ def get_or_create_csrf_token(request: Request, response: Response) -> str:
         response.set_cookie(
             key=CSRF_COOKIE_NAME,
             value=token,
-            httponly=False,  # JS needs to read this for AJAX if needed
-            secure=True,
+            httponly=False,
+            secure=_is_secure_request(request),
             samesite="lax",
             max_age=ADMIN_SESSION_EXPIRY_HOURS * 3600,
         )
@@ -238,8 +245,9 @@ async def login(
             key=JWT_COOKIE_NAME,
             value=access_token,
             httponly=True,
-            max_age=ADMIN_SESSION_EXPIRY_HOURS * 3600,
+            secure=_is_secure_request(request),
             samesite="lax",
+            max_age=ADMIN_SESSION_EXPIRY_HOURS * 3600,
         )
 
         logger.info(f"User {username} logged in successfully")
@@ -377,7 +385,7 @@ async def create_api_key(
 
     # Store key in secure flash cookie (not URL) to prevent leaking into logs/history
     response = RedirectResponse(url="/admin/api-keys", status_code=303)
-    set_flash_new_key(response, key_plaintext)
+    set_flash_new_key(request, response, key_plaintext)
     return response
 
 
