@@ -2,6 +2,7 @@
 Admin UI routes for multi-tenant management.
 """
 
+import secrets
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -109,6 +110,44 @@ def get_and_clear_flash_new_key(request: Request, response: Response) -> Optiona
         return None
 
 
+# ==================================================================================================
+# CSRF Protection (Double-Submit Cookie Pattern)
+# ==================================================================================================
+
+CSRF_COOKIE_NAME = "csrf_token"
+
+
+def get_or_create_csrf_token(request: Request, response: Response) -> str:
+    """Get existing CSRF token from cookie or create a new one."""
+    token = request.cookies.get(CSRF_COOKIE_NAME)
+    if not token:
+        token = secrets.token_urlsafe(32)
+        response.set_cookie(
+            key=CSRF_COOKIE_NAME,
+            value=token,
+            httponly=False,  # JS needs to read this for AJAX if needed
+            secure=True,
+            samesite="lax",
+            max_age=ADMIN_SESSION_EXPIRY_HOURS * 3600,
+        )
+    return token
+
+
+def verify_csrf_token(request: Request, csrf_token: str) -> None:
+    """Verify CSRF token from form matches cookie.
+
+    Args:
+        request: FastAPI request object
+        csrf_token: Token submitted via form
+
+    Raises:
+        HTTPException: If tokens don't match
+    """
+    cookie_token = request.cookies.get(CSRF_COOKIE_NAME)
+    if not cookie_token or not secrets.compare_digest(cookie_token, csrf_token):
+        raise HTTPException(status_code=403, detail="CSRF token mismatch")
+
+
 async def verify_admin_session(request: Request) -> dict:
     """
     Verify JWT session from cookie.
@@ -142,9 +181,14 @@ async def verify_admin_session(request: Request) -> dict:
 
 
 @router.get("/login", response_class=HTMLResponse)
-async def login_page(request: Request):
+async def login_page(request: Request, response: Response):
     """Display login page."""
-    return templates.TemplateResponse(name="admin/login.html", request=request)
+    csrf_token = get_or_create_csrf_token(request, response)
+    return templates.TemplateResponse(
+        name="admin/login.html",
+        request=request,
+        context={"csrf_token": csrf_token},
+    )
 
 
 @router.post("/login")
@@ -152,6 +196,7 @@ async def login(
     request: Request,
     username: str = Form(),
     password: str = Form(),
+    csrf_token: str = Form(""),
 ):
     """
     Authenticate admin user and create session.
@@ -163,6 +208,8 @@ async def login(
     Returns:
         Redirect to dashboard on success
     """
+    verify_csrf_token(request, csrf_token)
+
     db = request.app.state.db
 
     async with db.SessionLocal() as session:
@@ -200,8 +247,10 @@ async def login(
 
 
 @router.post("/logout")
-async def logout():
+async def logout(request: Request, csrf_token: str = Form("")):
     """Logout and clear session."""
+    verify_csrf_token(request, csrf_token)
+
     response = RedirectResponse(url="/admin/login", status_code=303)
     response.delete_cookie(JWT_COOKIE_NAME)
     return response
@@ -219,8 +268,10 @@ async def admin_root(request: Request, admin: dict = Depends(verify_admin_sessio
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
-async def dashboard(request: Request, admin: dict = Depends(verify_admin_session)):
+async def dashboard(request: Request, response: Response, admin: dict = Depends(verify_admin_session)):
     """Display admin dashboard with statistics."""
+    csrf_token = get_or_create_csrf_token(request, response)
+
     db = request.app.state.db
     api_key_manager = request.app.state.api_key_manager
     account_pool = request.app.state.account_pool
@@ -247,7 +298,7 @@ async def dashboard(request: Request, admin: dict = Depends(verify_admin_session
     return templates.TemplateResponse(
         name="admin/dashboard.html",
         request=request,
-        context={"admin": admin, "stats": stats},
+        context={"admin": admin, "stats": stats, "csrf_token": csrf_token},
     )
 
 
@@ -275,10 +326,12 @@ async def api_keys_page(request: Request, response: Response, admin: dict = Depe
     # Check for newly created key (flash message pattern)
     new_key = get_and_clear_flash_new_key(request, response)
 
+    csrf_token = get_or_create_csrf_token(request, response)
+
     return templates.TemplateResponse(
         name="admin/api_keys.html",
         request=request,
-        context={"admin": admin, "keys": keys, "new_key": new_key},
+        context={"admin": admin, "keys": keys, "new_key": new_key, "csrf_token": csrf_token},
     )
 
 
@@ -290,6 +343,7 @@ async def create_api_key(
     rate_limit_tpm: Optional[int] = Form(None),
     usage_limit_tokens: Optional[int] = Form(None),
     usage_limit_requests: Optional[int] = Form(None),
+    csrf_token: str = Form(""),
     admin: dict = Depends(verify_admin_session),
 ):
     """
@@ -305,6 +359,8 @@ async def create_api_key(
     Returns:
         Redirect to API keys page with new key displayed via secure flash cookie
     """
+    verify_csrf_token(request, csrf_token)
+
     api_key_manager = request.app.state.api_key_manager
 
     # Create key
@@ -329,9 +385,12 @@ async def create_api_key(
 async def deactivate_api_key(
     request: Request,
     key_id: str,
+    csrf_token: str = Form(""),
     admin: dict = Depends(verify_admin_session),
 ):
     """Deactivate an API key."""
+    verify_csrf_token(request, csrf_token)
+
     api_key_manager = request.app.state.api_key_manager
 
     success = await api_key_manager.deactivate_key(key_id)
@@ -346,9 +405,12 @@ async def deactivate_api_key(
 async def delete_api_key(
     request: Request,
     key_id: str,
+    csrf_token: str = Form(""),
     admin: dict = Depends(verify_admin_session),
 ):
     """Permanently delete an API key."""
+    verify_csrf_token(request, csrf_token)
+
     api_key_manager = request.app.state.api_key_manager
 
     success = await api_key_manager.delete_key(key_id)
@@ -365,9 +427,12 @@ async def update_api_key_limits(
     key_id: str,
     usage_limit_tokens: Optional[int] = Form(None),
     usage_limit_requests: Optional[int] = Form(None),
+    csrf_token: str = Form(""),
     admin: dict = Depends(verify_admin_session),
 ):
     """Update usage limits for an API key."""
+    verify_csrf_token(request, csrf_token)
+
     api_key_manager = request.app.state.api_key_manager
 
     success = await api_key_manager.update_limits(
@@ -388,15 +453,17 @@ async def update_api_key_limits(
 
 
 @router.get("/kiro-accounts", response_class=HTMLResponse)
-async def kiro_accounts_page(request: Request, admin: dict = Depends(verify_admin_session)):
+async def kiro_accounts_page(request: Request, response: Response, admin: dict = Depends(verify_admin_session)):
     """Display Kiro accounts management page."""
+    csrf_token = get_or_create_csrf_token(request, response)
+
     account_pool = request.app.state.account_pool
     accounts = await account_pool.list_accounts()
 
     return templates.TemplateResponse(
         name="admin/kiro_accounts.html",
         request=request,
-        context={"admin": admin, "accounts": accounts},
+        context={"admin": admin, "accounts": accounts, "csrf_token": csrf_token},
     )
 
 
@@ -480,9 +547,12 @@ async def oauth_callback_handler(
 async def toggle_account(
     request: Request,
     account_id: int,
+    csrf_token: str = Form(""),
     admin: dict = Depends(verify_admin_session),
 ):
     """Toggle account active status."""
+    verify_csrf_token(request, csrf_token)
+
     db = request.app.state.db
 
     async with db.SessionLocal() as session:
@@ -508,9 +578,12 @@ async def toggle_account(
 async def refresh_account_token(
     request: Request,
     account_id: int,
+    csrf_token: str = Form(""),
     admin: dict = Depends(verify_admin_session),
 ):
     """Manually refresh token for an account."""
+    verify_csrf_token(request, csrf_token)
+
     account_pool = request.app.state.account_pool
 
     try:
@@ -529,9 +602,12 @@ async def refresh_account_token(
 async def delete_account(
     request: Request,
     account_id: int,
+    csrf_token: str = Form(""),
     admin: dict = Depends(verify_admin_session),
 ):
     """Permanently delete a Kiro account."""
+    verify_csrf_token(request, csrf_token)
+
     account_pool = request.app.state.account_pool
 
     success = await account_pool.delete_account(account_id)
@@ -587,8 +663,10 @@ async def public_usage(request: Request, api_key: str):
 
 
 @router.get("/usage", response_class=HTMLResponse)
-async def usage_page(request: Request, admin: dict = Depends(verify_admin_session)):
+async def usage_page(request: Request, response: Response, admin: dict = Depends(verify_admin_session)):
     """Display usage analytics page."""
+    csrf_token = get_or_create_csrf_token(request, response)
+
     usage_tracker = request.app.state.usage_tracker
 
     # Get overall stats
@@ -621,6 +699,7 @@ async def usage_page(request: Request, admin: dict = Depends(verify_admin_sessio
             "by_model": by_model,
             "by_endpoint": by_endpoint,
             "recent_requests": recent_requests,
+            "csrf_token": csrf_token,
         },
     )
 
@@ -633,10 +712,13 @@ async def usage_page(request: Request, admin: dict = Depends(verify_admin_sessio
 @router.get("/daily-status", response_class=HTMLResponse)
 async def daily_status_page(
     request: Request,
+    response: Response,
     date: Optional[str] = None,
     admin: dict = Depends(verify_admin_session),
 ):
     """Display daily status page with per-model token throughput."""
+    csrf_token = get_or_create_csrf_token(request, response)
+
     usage_tracker = request.app.state.usage_tracker
 
     # Parse date or default to today (UTC)
@@ -701,5 +783,6 @@ async def daily_status_page(
             "daily_chart_models": daily_chart_models,
             "daily_chart_days": daily_chart_days,
             "today_traffic": today_traffic,
+            "csrf_token": csrf_token,
         },
     )

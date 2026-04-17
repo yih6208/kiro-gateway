@@ -108,15 +108,18 @@
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                         <form action="/admin/kiro-accounts/{{ account.id }}/toggle" method="POST" class="inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                             <button type="submit" class="text-indigo-600 hover:text-indigo-900">
                                 {% if account.is_active %}Deactivate{% else %}Activate{% endif %}
                             </button>
                         </form>
                         <form action="/admin/kiro-accounts/{{ account.id }}/refresh" method="POST" class="inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                             <button type="submit" class="text-green-600 hover:text-green-900">Refresh</button>
                         </form>
                         <form action="/admin/kiro-accounts/{{ account.id }}/delete" method="POST" class="inline"
                               onsubmit="return confirm('Are you sure you want to permanently delete this account? This cannot be undone.')">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                             <button type="submit" class="text-red-600 hover:text-red-900">Delete</button>
                         </form>
                     </td>
