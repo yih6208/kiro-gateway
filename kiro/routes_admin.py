@@ -24,6 +24,7 @@ templates = Jinja2Templates(directory="templates")
 # JWT configuration
 JWT_ALGORITHM = "HS256"
 JWT_COOKIE_NAME = "admin_session"
+FLASH_COOKIE_NAME = "flash_new_key"
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
@@ -46,6 +47,65 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, ADMIN_SESSION_SECRET, algorithm=JWT_ALGORITHM)
     return encoded_jwt
+
+
+def set_flash_new_key(response: Response, key: str) -> None:
+    """
+    Store new API key in a secure, short-lived cookie (flash message pattern).
+
+    This prevents the key from appearing in URL query parameters where it would
+    leak into browser history, server logs, and Referer headers.
+
+    Args:
+        response: FastAPI Response object
+        key: The plaintext API key to store temporarily
+    """
+    # Create a short-lived JWT token containing the key
+    # Token expires in 5 minutes - enough time to redirect and display once
+    flash_data = {
+        "key": key,
+        "exp": datetime.utcnow() + timedelta(minutes=5)
+    }
+    flash_token = jwt.encode(flash_data, ADMIN_SESSION_SECRET, algorithm=JWT_ALGORITHM)
+
+    # Set as HTTP-only secure cookie
+    response.set_cookie(
+        key=FLASH_COOKIE_NAME,
+        value=flash_token,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=300,  # 5 minutes
+    )
+
+
+def get_and_clear_flash_new_key(request: Request, response: Response) -> Optional[str]:
+    """
+    Retrieve and immediately clear the flash new key cookie.
+
+    This ensures the key is only visible once (on first page load after creation).
+
+    Args:
+        request: FastAPI Request object
+        response: FastAPI Response object to delete cookie
+
+    Returns:
+        The plaintext API key if found and valid, None otherwise
+    """
+    flash_token = request.cookies.get(FLASH_COOKIE_NAME)
+    if not flash_token:
+        return None
+
+    # Clear the cookie immediately
+    response.delete_cookie(FLASH_COOKIE_NAME)
+
+    try:
+        # Decode and extract key
+        payload = jwt.decode(flash_token, ADMIN_SESSION_SECRET, algorithms=[JWT_ALGORITHM])
+        return payload.get("key")
+    except JWTError:
+        # Invalid or expired token
+        return None
 
 
 async def verify_admin_session(request: Request) -> dict:
@@ -195,7 +255,7 @@ async def dashboard(request: Request, admin: dict = Depends(verify_admin_session
 
 
 @router.get("/api-keys", response_class=HTMLResponse)
-async def api_keys_page(request: Request, admin: dict = Depends(verify_admin_session)):
+async def api_keys_page(request: Request, response: Response, admin: dict = Depends(verify_admin_session)):
     """Display API keys management page."""
     api_key_manager = request.app.state.api_key_manager
     keys = await api_key_manager.list_keys()
@@ -210,9 +270,12 @@ async def api_keys_page(request: Request, admin: dict = Depends(verify_admin_ses
                 key_total_cost += cost["total_cost"]
         key["estimated_cost"] = key_total_cost
 
+    # Check for newly created key (flash message pattern)
+    new_key = get_and_clear_flash_new_key(request, response)
+
     return templates.TemplateResponse(
         "admin/api_keys.html",
-        {"request": request, "admin": admin, "keys": keys},
+        {"request": request, "admin": admin, "keys": keys, "new_key": new_key},
     )
 
 
@@ -237,7 +300,7 @@ async def create_api_key(
         usage_limit_requests: Total request count limit (optional)
 
     Returns:
-        Redirect to API keys page with new key displayed
+        Redirect to API keys page with new key displayed via secure flash cookie
     """
     api_key_manager = request.app.state.api_key_manager
 
@@ -253,11 +316,10 @@ async def create_api_key(
 
     logger.info(f"Created API key: {metadata['key_id']} by user {admin['username']}")
 
-    # Redirect with key in query param (shown once)
-    return RedirectResponse(
-        url=f"/admin/api-keys?new_key={key_plaintext}",
-        status_code=303,
-    )
+    # Store key in secure flash cookie (not URL) to prevent leaking into logs/history
+    response = RedirectResponse(url="/admin/api-keys", status_code=303)
+    set_flash_new_key(response, key_plaintext)
+    return response
 
 
 @router.post("/api-keys/{key_id}/deactivate")
