@@ -8,11 +8,14 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
+# Create non-root user for security
+RUN groupadd -r kiro && useradd -r -g kiro -m -d /home/kiro kiro
+
 # 安裝 kiro-cli
 RUN curl -fsSL https://cli.kiro.dev/install | bash
 
 # 將 kiro-cli 加入 PATH
-ENV PATH="/root/.local/bin:${PATH}"
+ENV PATH="/home/kiro/.local/bin:${PATH}"
 
 # 複製依賴文件（從根目錄）
 COPY requirements.txt .
@@ -26,9 +29,6 @@ COPY main.py .
 COPY templates ./templates
 COPY migrate_add_usage_limits.py .
 
-# 創建必要的目錄
-RUN mkdir -p debug_logs /root/.local/share/kiro-cli
-
 # 創建空的 .env 文件以通過驗證檢查
 # 實際配置來自 docker-compose.yml 的環境變數
 RUN touch /app/.env
@@ -36,6 +36,16 @@ RUN touch /app/.env
 # 複製啟動腳本（從 docker/ 子目錄）
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
+
+# Create necessary directories with proper ownership
+RUN mkdir -p debug_logs /home/kiro/.local/share/kiro-cli && \
+    chown -R kiro:kiro /app /home/kiro
+
+# Switch to non-root user
+USER kiro
+
+# Update PATH for non-root user
+ENV PATH="/home/kiro/.local/bin:${PATH}"
 
 EXPOSE 8000
 
