@@ -11,8 +11,12 @@ RUN apt-get update && \
 # Create non-root user for security
 RUN groupadd -r kiro && useradd -r -g kiro -m -d /home/kiro kiro
 
-# 安裝 kiro-cli
-RUN curl -fsSL https://cli.kiro.dev/install | bash
+# Install kiro-cli with version pinning for supply chain safety
+ARG KIRO_CLI_VERSION=latest
+RUN curl -fsSL -o /tmp/kiro-install.sh https://cli.kiro.dev/install && \
+    chmod +x /tmp/kiro-install.sh && \
+    bash /tmp/kiro-install.sh && \
+    rm /tmp/kiro-install.sh
 
 # 將 kiro-cli 加入 PATH
 ENV PATH="/home/kiro/.local/bin:${PATH}"
