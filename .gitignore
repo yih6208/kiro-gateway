@@ -50,3 +50,10 @@ USAGE_LIMITS_FEATURE.md
 
 # Test scripts (not part of test suite)
 test_large_file.py
+
+# Security: test scripts with credentials
+test_1m_*.py
+benchmark_models.py
+test_invoke_mcp.py
+stress_test*.py
+local_settings.json
