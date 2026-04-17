@@ -143,7 +143,7 @@ async def verify_admin_session(request: Request) -> dict:
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
     """Display login page."""
-    return templates.TemplateResponse("admin/login.html", {"request": request})
+    return templates.TemplateResponse(name="admin/login.html", request=request)
 
 
 @router.post("/login")
@@ -244,8 +244,9 @@ async def dashboard(request: Request, admin: dict = Depends(verify_admin_session
     }
 
     return templates.TemplateResponse(
-        "admin/dashboard.html",
-        {"request": request, "admin": admin, "stats": stats},
+        name="admin/dashboard.html",
+        request=request,
+        context={"admin": admin, "stats": stats},
     )
 
 
@@ -274,8 +275,9 @@ async def api_keys_page(request: Request, response: Response, admin: dict = Depe
     new_key = get_and_clear_flash_new_key(request, response)
 
     return templates.TemplateResponse(
-        "admin/api_keys.html",
-        {"request": request, "admin": admin, "keys": keys, "new_key": new_key},
+        name="admin/api_keys.html",
+        request=request,
+        context={"admin": admin, "keys": keys, "new_key": new_key},
     )
 
 
@@ -391,8 +393,9 @@ async def kiro_accounts_page(request: Request, admin: dict = Depends(verify_admi
     accounts = await account_pool.list_accounts()
 
     return templates.TemplateResponse(
-        "admin/kiro_accounts.html",
-        {"request": request, "admin": admin, "accounts": accounts},
+        name="admin/kiro_accounts.html",
+        request=request,
+        context={"admin": admin, "accounts": accounts},
     )
 
 
@@ -563,9 +566,9 @@ async def public_usage(request: Request, api_key: str):
             total_estimated_cost += cost["total_cost"]
 
     return templates.TemplateResponse(
-        "public/usage.html",
-        {
-            "request": request,
+        name="public/usage.html",
+        request=request,
+        context={
             "key_name": metadata["name"],
             "key_id": metadata["key_id"],
             "stats": stats,
@@ -608,9 +611,9 @@ async def usage_page(request: Request, admin: dict = Depends(verify_admin_sessio
     recent_requests = await usage_tracker.get_recent_requests(limit=50)
 
     return templates.TemplateResponse(
-        "admin/usage.html",
-        {
-            "request": request,
+        name="admin/usage.html",
+        request=request,
+        context={
             "admin": admin,
             "overall_stats": overall_stats,
             "total_estimated_cost": total_estimated_cost,
@@ -680,9 +683,9 @@ async def daily_status_page(
         row["estimated_cost"] = cost["total_cost"]
 
     return templates.TemplateResponse(
-        "admin/daily_status.html",
-        {
-            "request": request,
+        name="admin/daily_status.html",
+        request=request,
+        context={
             "admin": admin,
             "selected_date": selected_date.isoformat(),
             "prev_date": prev_date,
