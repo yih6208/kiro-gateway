@@ -293,6 +293,11 @@ async def lifespan(app: FastAPI):
     and enable connection reuse. This is especially important for handling
     concurrent requests efficiently (fixes issue #24).
     """
+    # CRITICAL: Validate configuration before any initialization
+    # This runs regardless of how the app is started (python main.py or uvicorn main:app)
+    # Prevents startup with missing credentials or security secrets
+    validate_configuration()
+
     logger.info("Starting application... Creating state managers.")
 
     # Log environment configuration for debugging
