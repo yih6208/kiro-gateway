@@ -91,35 +91,6 @@ def _read_flash_new_key(request: Request) -> Optional[str]:
         return None
 
 
-def get_and_clear_flash_new_key(request: Request, response: Response) -> Optional[str]:
-    """
-    Retrieve and immediately clear the flash new key cookie.
-
-    This ensures the key is only visible once (on first page load after creation).
-
-    Args:
-        request: FastAPI Request object
-        response: FastAPI Response object to delete cookie
-
-    Returns:
-        The plaintext API key if found and valid, None otherwise
-    """
-    flash_token = request.cookies.get(FLASH_COOKIE_NAME)
-    if not flash_token:
-        return None
-
-    # Clear the cookie immediately
-    response.delete_cookie(FLASH_COOKIE_NAME)
-
-    try:
-        # Decode and extract key
-        payload = jwt.decode(flash_token, ADMIN_SESSION_SECRET, algorithms=[JWT_ALGORITHM])
-        return payload.get("key")
-    except JWTError:
-        # Invalid or expired token
-        return None
-
-
 # ==================================================================================================
 # CSRF Protection (Double-Submit Cookie Pattern)
 # ==================================================================================================
@@ -136,21 +107,22 @@ def _is_secure_request(request: Request) -> bool:
     return False
 
 
-def get_or_create_csrf_token(request: Request) -> str:
-    """Get existing CSRF token from cookie or create a new one."""
-    return request.cookies.get(CSRF_COOKIE_NAME) or secrets.token_urlsafe(32)
-
-
-def set_csrf_cookie(request: Request, response: Response, token: str) -> None:
-    """Set CSRF token cookie on the response."""
-    response.set_cookie(
-        key=CSRF_COOKIE_NAME,
-        value=token,
-        httponly=False,
-        secure=_is_secure_request(request),
-        samesite="lax",
-        max_age=ADMIN_SESSION_EXPIRY_HOURS * 3600,
-    )
+def _render_with_csrf(request: Request, template_name: str, context: dict = None):
+    """Render a template with CSRF token, setting cookie only when needed."""
+    existing = request.cookies.get(CSRF_COOKIE_NAME)
+    csrf_token = existing or secrets.token_urlsafe(32)
+    ctx = {**(context or {}), "csrf_token": csrf_token}
+    resp = templates.TemplateResponse(name=template_name, request=request, context=ctx)
+    if not existing:
+        resp.set_cookie(
+            key=CSRF_COOKIE_NAME,
+            value=csrf_token,
+            httponly=False,
+            secure=_is_secure_request(request),
+            samesite="lax",
+            max_age=ADMIN_SESSION_EXPIRY_HOURS * 3600,
+        )
+    return resp
 
 
 def verify_csrf_token(request: Request, csrf_token: str) -> None:
@@ -203,14 +175,7 @@ async def verify_admin_session(request: Request) -> dict:
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
     """Display login page."""
-    csrf_token = get_or_create_csrf_token(request)
-    resp = templates.TemplateResponse(
-        name="admin/login.html",
-        request=request,
-        context={"csrf_token": csrf_token},
-    )
-    set_csrf_cookie(request, resp, csrf_token)
-    return resp
+    return _render_with_csrf(request, "admin/login.html")
 
 
 @router.post("/login")
@@ -293,19 +258,15 @@ async def admin_root(request: Request, admin: dict = Depends(verify_admin_sessio
 @router.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request, admin: dict = Depends(verify_admin_session)):
     """Display admin dashboard with statistics."""
-    csrf_token = get_or_create_csrf_token(request)
-
     db = request.app.state.db
     api_key_manager = request.app.state.api_key_manager
     account_pool = request.app.state.account_pool
     usage_tracker = request.app.state.usage_tracker
 
-    # Get statistics
     api_keys = await api_key_manager.list_keys()
     accounts = await account_pool.list_accounts()
     usage_stats = await usage_tracker.get_usage_stats()
 
-    # Count active/inactive
     active_keys = sum(1 for key in api_keys if key["is_active"])
     active_accounts = sum(1 for acc in accounts if acc["is_active"])
 
@@ -318,13 +279,7 @@ async def dashboard(request: Request, admin: dict = Depends(verify_admin_session
         "total_tokens": usage_stats["total_tokens"],
     }
 
-    resp = templates.TemplateResponse(
-        name="admin/dashboard.html",
-        request=request,
-        context={"admin": admin, "stats": stats, "csrf_token": csrf_token},
-    )
-    set_csrf_cookie(request, resp, csrf_token)
-    return resp
+    return _render_with_csrf(request, "admin/dashboard.html", {"admin": admin, "stats": stats})
 
 
 # ==================================================================================================
@@ -348,20 +303,13 @@ async def api_keys_page(request: Request, admin: dict = Depends(verify_admin_ses
                 key_total_cost += cost["total_cost"]
         key["estimated_cost"] = key_total_cost
 
-    # Read flash key from cookie (before building response)
     new_key = _read_flash_new_key(request)
-    csrf_token = get_or_create_csrf_token(request)
 
-    resp = templates.TemplateResponse(
-        name="admin/api_keys.html",
-        request=request,
-        context={"admin": admin, "keys": keys, "new_key": new_key, "csrf_token": csrf_token},
-    )
-
-    # Clear flash cookie and set CSRF cookie on the actual response
+    resp = _render_with_csrf(request, "admin/api_keys.html", {
+        "admin": admin, "keys": keys, "new_key": new_key,
+    })
     if new_key:
         resp.delete_cookie(FLASH_COOKIE_NAME)
-    set_csrf_cookie(request, resp, csrf_token)
     return resp
 
 
@@ -485,18 +433,12 @@ async def update_api_key_limits(
 @router.get("/kiro-accounts", response_class=HTMLResponse)
 async def kiro_accounts_page(request: Request, admin: dict = Depends(verify_admin_session)):
     """Display Kiro accounts management page."""
-    csrf_token = get_or_create_csrf_token(request)
-
     account_pool = request.app.state.account_pool
     accounts = await account_pool.list_accounts()
 
-    resp = templates.TemplateResponse(
-        name="admin/kiro_accounts.html",
-        request=request,
-        context={"admin": admin, "accounts": accounts, "csrf_token": csrf_token},
-    )
-    set_csrf_cookie(request, resp, csrf_token)
-    return resp
+    return _render_with_csrf(request, "admin/kiro_accounts.html", {
+        "admin": admin, "accounts": accounts,
+    })
 
 
 @router.get("/kiro-accounts/oauth/start")
@@ -697,17 +639,11 @@ async def public_usage(request: Request, api_key: str):
 @router.get("/usage", response_class=HTMLResponse)
 async def usage_page(request: Request, admin: dict = Depends(verify_admin_session)):
     """Display usage analytics page."""
-    csrf_token = get_or_create_csrf_token(request)
-
     usage_tracker = request.app.state.usage_tracker
 
-    # Get overall stats
     overall_stats = await usage_tracker.get_usage_stats()
-
-    # Get usage by model
     by_model = await usage_tracker.get_usage_by_model()
 
-    # Calculate estimated costs per model
     total_estimated_cost = 0.0
     for model in by_model:
         cost = calculate_cost(model["model"], model["input_tokens"], model["output_tokens"])
@@ -715,27 +651,17 @@ async def usage_page(request: Request, admin: dict = Depends(verify_admin_sessio
         if cost["total_cost"] is not None:
             total_estimated_cost += cost["total_cost"]
 
-    # Get usage by endpoint
     by_endpoint = await usage_tracker.get_usage_by_endpoint()
-
-    # Get recent requests
     recent_requests = await usage_tracker.get_recent_requests(limit=50)
 
-    resp = templates.TemplateResponse(
-        name="admin/usage.html",
-        request=request,
-        context={
-            "admin": admin,
-            "overall_stats": overall_stats,
-            "total_estimated_cost": total_estimated_cost,
-            "by_model": by_model,
-            "by_endpoint": by_endpoint,
-            "recent_requests": recent_requests,
-            "csrf_token": csrf_token,
-        },
-    )
-    set_csrf_cookie(request, resp, csrf_token)
-    return resp
+    return _render_with_csrf(request, "admin/usage.html", {
+        "admin": admin,
+        "overall_stats": overall_stats,
+        "total_estimated_cost": total_estimated_cost,
+        "by_model": by_model,
+        "by_endpoint": by_endpoint,
+        "recent_requests": recent_requests,
+    })
 
 
 # ==================================================================================================
@@ -750,8 +676,6 @@ async def daily_status_page(
     admin: dict = Depends(verify_admin_session),
 ):
     """Display daily status page with per-model token throughput."""
-    csrf_token = get_or_create_csrf_token(request)
-
     usage_tracker = request.app.state.usage_tracker
 
     # Parse date or default to today (UTC)
@@ -798,26 +722,19 @@ async def daily_status_page(
         cost = calculate_cost(row["model"], row["input_tokens"], row["output_tokens"])
         row["estimated_cost"] = cost["total_cost"]
 
-    resp = templates.TemplateResponse(
-        name="admin/daily_status.html",
-        request=request,
-        context={
-            "admin": admin,
-            "selected_date": selected_date.isoformat(),
-            "prev_date": prev_date,
-            "next_date": next_date,
-            "is_today": is_today,
-            "daily_summary": daily_summary,
-            "hourly_throughput": hourly_throughput,
-            "hourly_chart_data": hourly_chart_data,
-            "hourly_models": hourly_models,
-            "daily_traffic": daily_traffic,
-            "daily_chart_data": daily_chart_data,
-            "daily_chart_models": daily_chart_models,
-            "daily_chart_days": daily_chart_days,
-            "today_traffic": today_traffic,
-            "csrf_token": csrf_token,
-        },
-    )
-    set_csrf_cookie(request, resp, csrf_token)
-    return resp
+    return _render_with_csrf(request, "admin/daily_status.html", {
+        "admin": admin,
+        "selected_date": selected_date.isoformat(),
+        "prev_date": prev_date,
+        "next_date": next_date,
+        "is_today": is_today,
+        "daily_summary": daily_summary,
+        "hourly_throughput": hourly_throughput,
+        "hourly_chart_data": hourly_chart_data,
+        "hourly_models": hourly_models,
+        "daily_traffic": daily_traffic,
+        "daily_chart_data": daily_chart_data,
+        "daily_chart_models": daily_chart_models,
+        "daily_chart_days": daily_chart_days,
+        "today_traffic": today_traffic,
+    })
